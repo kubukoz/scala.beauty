@@ -10,28 +10,7 @@ import smithy4s.http4s.SimpleRestJsonBuilder
 object BackendMain extends IOApp.Simple {
 
   def run: IO[Unit] = {
-    val service = new ScalaBeautyApi[IO] {
-      def getSnippets(before: Option[Slug], page: Option[Page]): IO[GetSnippetsOutput] =
-        IO.println("Received request to get snippets") *>
-          IO.pure(
-            GetSnippetsOutput(
-              List(
-                Snippet(
-                  id = Slug("my-snippet"),
-                  author = Author.github(GithubAuthor(username = "kubukoz")),
-                  description = "My snippet",
-                  code = """def hello = println("foobar!")""",
-                ),
-                Snippet(
-                  id = Slug("my-snippet-2"),
-                  author = Author.github(GithubAuthor(username = "kubukoz")),
-                  description = "My snippet 2",
-                  code = """def hello = println("foobar but different!")""",
-                ),
-              )
-            )
-          )
-    }
+    val service = ScalaBeautyApiImpl.instance
 
     for {
       route <- SimpleRestJsonBuilder.routes(service).resource
