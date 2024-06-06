@@ -1,4 +1,4 @@
-package beauty
+package scalabeauty.backend
 
 import cats.effect.IO
 import cats.effect.IOApp
@@ -7,7 +7,7 @@ import org.http4s.ember.server.EmberServerBuilder
 import scalabeauty.api.*
 import smithy4s.http4s.SimpleRestJsonBuilder
 
-object Main extends IOApp.Simple {
+object BackendMain extends IOApp.Simple {
 
   def run: IO[Unit] = {
     val service = new ScalaBeautyApi[IO] {
@@ -21,7 +21,13 @@ object Main extends IOApp.Simple {
                   author = Author.github(GithubAuthor(username = "kubukoz")),
                   description = "My snippet",
                   code = """def hello = println("foobar!")""",
-                )
+                ),
+                Snippet(
+                  id = Slug("my-snippet-2"),
+                  author = Author.github(GithubAuthor(username = "kubukoz")),
+                  description = "My snippet 2",
+                  code = """def hello = println("foobar but different!")""",
+                ),
               )
             )
           )

@@ -10,4 +10,7 @@ libraryDependencies ++= Seq(
   "com.lihaoyi" %% "sourcecode" % "0.4.2"
 )
 
+addSbtPlugin("org.scala-js" % "sbt-scalajs"       % "1.16.0")
+addSbtPlugin("com.eed3si9n" % "sbt-projectmatrix" % "0.10.0")
+
 addDependencyTreePlugin
