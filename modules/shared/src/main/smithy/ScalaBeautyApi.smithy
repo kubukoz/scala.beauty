@@ -45,7 +45,15 @@ operation GetSnippet {
         @required
         snippet: Snippet
     }
+
+    errors: [
+        SnippetNotFound
+    ]
 }
+
+@error("client")
+@httpError(404)
+structure SnippetNotFound {}
 
 list Snippets {
     member: Snippet
