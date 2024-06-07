@@ -26,15 +26,17 @@ object ScalaBeautyApiImpl {
             )
           )
 
-    def getSnippet(id: Slug): IO[GetSnippetOutput] = IO {
-      GetSnippetOutput {
-        Snippet(
-          id = id,
-          author = Author.github(GithubAuthor(username = "kubukoz")),
-          description = "This amazing snippet prints foobar to the console!",
-          code = """def hello = println("foobar!")""",
-        )
-      }
-    }
+    def getSnippet(id: Slug): IO[GetSnippetOutput] =
+      IO.println("Received request to get snippet") *>
+        IO {
+          GetSnippetOutput {
+            Snippet(
+              id = id,
+              author = Author.github(GithubAuthor(username = "kubukoz")),
+              description = "This amazing snippet prints foobar to the console!",
+              code = """def hello = println("foobar!")""",
+            )
+          }
+        }
   }
 }
