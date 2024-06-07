@@ -12,6 +12,7 @@ import smithy4s.http4s.SimpleRestJsonBuilder
 import tyrian.*
 import tyrian.Html.*
 
+import scala.annotation.nowarn
 import scala.concurrent.duration.{span => _, *}
 import scala.scalajs.js.annotation.JSExportTopLevel
 
@@ -27,7 +28,8 @@ enum Msg {
   case OpenedSnippet(snippet: Snippet)
   case NoOp
   case SetTitle(title: String)
-  case UpdateHash(hash: Slug)
+  case UpdatePlaceholder(hash: Slug)
+  case ShortenMask
 }
 
 case class Model(page: Page) {
@@ -35,17 +37,17 @@ case class Model(page: Page) {
 }
 
 enum SnippetState {
-  case Fetching(placeholderSlug: Slug)
-  case Fetched(snippet: Snippet)
+  case Fetching
+  case Fetched(snippet: Snippet, maskSize: Int)
 
-  def mapFetching(f: Slug => SnippetState.Fetching): SnippetState = this match {
-    case SnippetState.Fetching(slug) => f(slug)
-    case s                           => s
+  def mapFetched(f: SnippetState.Fetched => SnippetState.Fetched): SnippetState = this match {
+    case fe: SnippetState.Fetched => f(fe)
+    case s                        => s
   }
 }
 enum Page {
   case Home(data: List[api.Snippet])
-  case Snippet(state: SnippetState)
+  case Snippet(state: SnippetState, placeholderSlug: Slug)
 
   def mapHome(f: Page.Home => Page.Home): Page = this match {
     case h: Home    => f(h)
@@ -89,8 +91,9 @@ object FrontendMain extends TyrianIOApp[Msg, Model] {
   def view(model: Model): Html[Msg] =
     model.page.match {
       case Page.Home(data)                                  => viewHome(data)
-      case Page.Snippet(SnippetState.Fetching(placeholder)) => viewSnippetPlaceholder(placeholder)
-      case Page.Snippet(SnippetState.Fetched(snip))         => viewSnippet(snip)
+      case Page.Snippet(SnippetState.Fetching, placeholder) => viewSnippetPlaceholder(placeholder)
+      case Page.Snippet(SnippetState.Fetched(snip, maskSize), placeholder) =>
+        viewSnippet(snip.copy(id = snip.id.mask(placeholder.takeRight(maskSize))))
     }
 
   private def viewGeneric(content: Elem[Msg]*) =
@@ -193,8 +196,16 @@ object FrontendMain extends TyrianIOApp[Msg, Model] {
       )
     )
 
-  def viewSlug(slug: Slug)               = span(className := "has-text-grey is-family-monospace")(slug.hashed)
-  extension (s: Slug) def hashed: String = "#" + s.value
+  def viewSlug(slug: Slug) = span(className := "has-text-grey is-family-monospace")(slug.hashed)
+  extension (s: Slug) {
+    def hashed: String          = "#" + s.value
+    def nonEmpty: Boolean       = s.value.nonEmpty
+    def takeRight(n: Int): Slug = Slug(s.value.takeRight(n))
+    def mask(another: Slug): Slug = {
+      val n = another.value.length
+      Slug(s.value.dropRight(n) + another.value)
+    }
+  }
 
   private def header(items: Elem[Msg]*) =
     h1(
@@ -240,6 +251,13 @@ object FrontendMain extends TyrianIOApp[Msg, Model] {
     )
   )
 
+  @nowarn("msg=unused")
+  private def logged[A, B](f: A => B): A => B = a => {
+    val result = f(a)
+    println(s"Action: $a\nResult: $result")
+    result
+  }
+
   def update(model: Model): Msg => (Model, Cmd[IO, Msg]) = {
     case Msg.GotSnippets(data) =>
       // important: this message is only relevant at home
@@ -247,7 +265,7 @@ object FrontendMain extends TyrianIOApp[Msg, Model] {
 
     case Msg.OpenSnippet(id) =>
       (
-        model.copy(page = Page.Snippet(SnippetState.Fetching(id))),
+        model.copy(page = Page.Snippet(SnippetState.Fetching, placeholderSlug = mkSlug(10))),
         Cmd.emit(Msg.SetTitle("Scala.beauty - loading snippet " + id.hashed))
           |+| Cmd
             .Run(ScalaBeautyApi[IO].getSnippet(id))
@@ -261,7 +279,9 @@ object FrontendMain extends TyrianIOApp[Msg, Model] {
       // ...or we can try to make the fetches subscriptions instead of commands, which will allow cancelling them
       (
         model
-          .mapPage(_.mapSnippet(s => s.copy(state = SnippetState.Fetched(snippet)))),
+          .mapPage(
+            _.mapSnippet(s => s.copy(state = SnippetState.Fetched(snippet, maskSize = snippet.id.value.length)))
+          ),
         Cmd.emit(Msg.SetTitle("Scala.beauty - snippet " + snippet.id.hashed)),
       )
 
@@ -277,6 +297,8 @@ object FrontendMain extends TyrianIOApp[Msg, Model] {
         },
       )
 
+    // For some (probably reasonable) reason, this gets hit twice when you go directly to home.
+    // TODO: check if the model is already fetching the data?
     case Msg.GoHome           => initialize
     case Msg.GoHomeResetState => initialize.fmap(_ |+| Nav.pushUrl("/"))
     case Msg.SetTitle(title) =>
@@ -286,10 +308,14 @@ object FrontendMain extends TyrianIOApp[Msg, Model] {
           org.scalajs.dom.document.title = title
         },
       )
-    case Msg.UpdateHash(hash) =>
+    case Msg.UpdatePlaceholder(hash) =>
       // I really need lenses... and some OOP
       model.mapPage(
-        _.mapSnippet(s => s.copy(state = s.state.mapFetching(_ => SnippetState.Fetching(hash))))
+        _.mapSnippet(s => s.copy(placeholderSlug = hash))
+      ) -> Cmd.None
+    case Msg.ShortenMask =>
+      model.mapPage(
+        _.mapSnippet(s => s.copy(state = s.state.mapFetched(s => s.copy(maskSize = s.maskSize - 1))))
       ) -> Cmd.None
 
     case Msg.NoOp => (model, Cmd.None)
@@ -297,12 +323,24 @@ object FrontendMain extends TyrianIOApp[Msg, Model] {
 
   def subscriptions(model: Model): Sub[IO, Msg] =
     model.page.match {
-      case Page.Snippet(SnippetState.Fetching(_)) =>
-        Sub.every[IO](1.second / 20 /* todo config */ ).map(_ => Msg.UpdateHash(mkSlug(10)))
-      case _ => Sub.None
+      case Page.Snippet(s, _) =>
+        val updatePlaceholder = Sub.every[IO](1.second / 60).map(_ => Msg.UpdatePlaceholder(mkSlug(10)))
+
+        s.match {
+          case SnippetState.Fetching => updatePlaceholder
+
+          case SnippetState.Fetched(snippet, maskSize) if maskSize > 0 =>
+            updatePlaceholder |+| Sub.every[IO](1.second / 20).map(_ => Msg.ShortenMask)
+
+          case SnippetState.Fetched(_, _) =>
+            Sub.None
+        }
+      case _ =>
+        Sub.None
     }
 
-    // todo share with backend
+  // todo share with backend
+  // todo side effects
   private def mkSlug(len: Int) = Slug(scala.util.Random.alphanumeric.take(len).mkString.toLowerCase())
 
   def router: Location => Msg = {
