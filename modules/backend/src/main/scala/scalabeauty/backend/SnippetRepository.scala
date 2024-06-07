@@ -20,6 +20,7 @@ object SnippetRepository {
 
     object codecs {
       import skunk.codec.all.*
+      import skunk.smithy4s.codec.all.*
 
       given [From, To](using b: Bijection[From, To]): Iso[From, To] = Iso.instance(b.to)(b.from)
 
@@ -28,9 +29,7 @@ object SnippetRepository {
           text.to[Slug] *:
             text *:
             text *:
-            text
-              .to[GithubAuthor]
-              .imap(Author.github)(_.project.github.getOrElse(sys.error("oops not a github author!")))
+            jsonb[Author]
         ).to[Snippet]
     }
 
@@ -42,7 +41,7 @@ object SnippetRepository {
             id text primary key,
             description text not null,
             code text not null,
-            author text not null
+            author jsonb not null
           )""".command
           )
         }.void
