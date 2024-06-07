@@ -31,7 +31,7 @@ object ScalaBeautyApiImpl {
         Snippet(
           id = id,
           author = Author.github(GithubAuthor(username = "kubukoz")),
-          description = "My snippet (full)",
+          description = "This amazing snippet prints foobar to the console!",
           code = """def hello = println("foobar!")""",
         )
       }
