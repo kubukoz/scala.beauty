@@ -70,47 +70,103 @@ object FrontendMain extends TyrianIOApp[Msg, Model] {
 
   def view(model: Model): Html[Msg] =
     model.page.match {
-      case h: Page.Home             => viewHome(h)
+      case Page.Home(data)          => viewHome(data)
       case Page.Snippet(None)       => viewSnippetPlaceholder
       case Page.Snippet(Some(snip)) => viewSnippet(snip)
     }
 
   private def viewGeneric(content: Elem[Msg]*) =
-    section(
-      className := "section"
-    )(
-      div(
-        className := "container"
-      )(content.toList)
+    div(className := "hero is-fullheight")(
+      section(
+        className := "section"
+      )(
+        div(
+          className := "container"
+        )(content.toList)
+      ),
+      footer(
+        className := "footer is-flex-align-items-flex-end mt-auto"
+      )(
+        div(className := "content has-text-centered")(
+          text("Built with "),
+          a(linkAttrs("https://scala-lang.org"))("Scala"),
+          text(", "),
+          a(linkAttrs("https://www.scala-js.org"))("Scala.js"),
+          text(", "),
+          a(linkAttrs("https://tyrian.indigoengine.io"))("Tyrian"),
+          text(", "),
+          a(linkAttrs("https://disneystreaming.github.io/smithy4s"))("Smithy4s"),
+          text(", "),
+          a(linkAttrs("https://bulma.io"))("Bulma"),
+          text(" and "),
+          a(linkAttrs("https://http4s.org"))("http4s"),
+          text("."),
+        )
+      ),
     )
 
-  private def viewHome(page: Page.Home) =
+  private def viewHome(data: List[Snippet]) =
     viewGeneric(
       header(text("Scala.beauty")),
       subtitle(
         text("Today's top snippets:")
       ),
       button(className := "button block")("Add yours"),
-      if (page.data.isEmpty) div(className := "block")(text("Loading..."))
+      if (data.isEmpty) div(className := "block")(text("Loading..."))
       else
-        ul(
-          page.data.map { snippet =>
-            li(className := "block")(
-              a(href := "/snippet/" + snippet.id)(
-                div(className := "box")(
-                  div(className := "block")(
-                    viewSlug(snippet.id),
-                    text(" by "),
-                    viewAuthor(snippet.author),
-                  ),
-                  p(className := "block")(i(snippet.description)),
-                  div(className := "block")(pre(code(snippet.code))),
+        div(
+          ul(className := "block")(
+            data.map { snippet =>
+              li(className := "block")(
+                a(href := "/snippet/" + snippet.id)(
+                  div(className := "box")(
+                    div(className := "block")(
+                      viewSlug(snippet.id),
+                      text(" by "),
+                      viewAuthor(snippet.author),
+                    ),
+                    p(className := "block")(i(snippet.description)),
+                    div(className := "block")(pre(code(snippet.code))),
+                  )
                 )
               )
-            )
 
-          }
+            }
+          ),
+          pagination,
         ),
+    )
+
+  private def pagination =
+    nav(
+      className := "pagination block is-centered",
+      role      := "navigation",
+    )(
+      ul(className := "pagination-list")(
+        li(
+          a(className := "pagination-link")("1")
+        ),
+        li(
+          span(className := "pagination-ellipsis")("…")
+        ),
+        li(
+          a(className := "pagination-link")("45")
+        ),
+        li(
+          a(
+            className := "pagination-link is-current"
+          )("46")
+        ),
+        li(
+          a(className := "pagination-link")("47")
+        ),
+        li(
+          span(className := "pagination-ellipsis")("…")
+        ),
+        li(
+          a(className := "pagination-link")("86")
+        ),
+      )
     )
 
   def viewSlug(slug: Slug)               = span(className := "has-text-grey is-family-monospace")(slug.hashed)
@@ -126,9 +182,14 @@ object FrontendMain extends TyrianIOApp[Msg, Model] {
       className := "subtitle"
     )(items.toList)
 
+  private def linkAttrs(url: String) = List(
+    href := url,
+    onClick(Msg.NewTab(url)),
+  )
+
   private def viewAuthor(author: Author) = author.match { case GithubCase(github) =>
     val url = show"https://github.com/${github.username}"
-    a(href := url, onClick(Msg.NewTab(url)))(
+    a(linkAttrs(url))(
       show"@${github.username}"
     )
   }
