@@ -84,25 +84,7 @@ object FrontendMain extends TyrianIOApp[Msg, Model] {
           className := "container"
         )(content.toList)
       ),
-      footer(
-        className := "footer is-flex-align-items-flex-end mt-auto"
-      )(
-        div(className := "content has-text-centered")(
-          text("Built with "),
-          a(linkAttrs("https://scala-lang.org"))("Scala"),
-          text(", "),
-          a(linkAttrs("https://www.scala-js.org"))("Scala.js"),
-          text(", "),
-          a(linkAttrs("https://tyrian.indigoengine.io"))("Tyrian"),
-          text(", "),
-          a(linkAttrs("https://disneystreaming.github.io/smithy4s"))("Smithy4s"),
-          text(", "),
-          a(linkAttrs("https://bulma.io"))("Bulma"),
-          text(" and "),
-          a(linkAttrs("https://http4s.org"))("http4s"),
-          text("."),
-        )
-      ),
+      viewFooter,
     )
 
   private def viewHome(data: List[Snippet]) =
@@ -119,25 +101,28 @@ object FrontendMain extends TyrianIOApp[Msg, Model] {
             data.map { snippet =>
               li(className := "block")(
                 a(href := "/snippet/" + snippet.id)(
-                  div(className := "box")(
-                    div(className := "block")(
-                      viewSlug(snippet.id),
-                      text(" by "),
-                      viewAuthor(snippet.author),
-                    ),
-                    p(className := "block")(i(snippet.description)),
-                    div(className := "block")(pre(code(snippet.code))),
-                  )
+                  viewSnippetBox(snippet)
                 )
               )
 
             }
           ),
-          pagination,
+          viewPagination,
         ),
     )
 
-  private def pagination =
+  private def viewSnippetBox(snippet: Snippet) =
+    div(className := "box")(
+      div(className := "block")(
+        viewSlug(snippet.id),
+        text(" by "),
+        viewAuthor(snippet.author),
+      ),
+      p(className := "block")(i(snippet.description)),
+      div(className := "block")(pre(code(snippet.code))),
+    )
+
+  private def viewPagination =
     nav(
       className := "pagination block is-centered",
       role      := "navigation",
@@ -166,6 +151,27 @@ object FrontendMain extends TyrianIOApp[Msg, Model] {
         li(
           a(className := "pagination-link")("86")
         ),
+      )
+    )
+
+  private def viewFooter =
+    footer(
+      className := "footer is-flex-align-items-flex-end mt-auto"
+    )(
+      div(className := "content has-text-centered")(
+        text("Built with "),
+        a(linkAttrs("https://scala-lang.org"))("Scala"),
+        text(", "),
+        a(linkAttrs("https://www.scala-js.org"))("Scala.js"),
+        text(", "),
+        a(linkAttrs("https://tyrian.indigoengine.io"))("Tyrian"),
+        text(", "),
+        a(linkAttrs("https://disneystreaming.github.io/smithy4s"))("Smithy4s"),
+        text(", "),
+        a(linkAttrs("https://bulma.io"))("Bulma"),
+        text(" and "),
+        a(linkAttrs("https://http4s.org"))("http4s"),
+        text("."),
       )
     )
 
