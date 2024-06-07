@@ -12,31 +12,49 @@ import smithy4s.http4s.SimpleRestJsonBuilder
 import tyrian.*
 import tyrian.Html.*
 
+import scala.concurrent.duration.{span => _, *}
 import scala.scalajs.js.annotation.JSExportTopLevel
 
 enum Msg {
+  // todo rename
   case GotSnippets(data: List[Snippet])
   case NavigateTo(url: String)
   case NewTab(url: String)
   case OpenSnippet(id: Slug)
   case GoHome
   case GoHomeResetState
+  // todo rename
   case OpenedSnippet(snippet: Snippet)
   case NoOp
   case SetTitle(title: String)
+  case UpdateHash(hash: Slug)
 }
 
 case class Model(page: Page) {
   def mapPage(f: Page => Page): Model = copy(page = f(page))
 }
 
+enum SnippetState {
+  case Fetching(placeholderSlug: Slug)
+  case Fetched(snippet: Snippet)
+
+  def mapFetching(f: Slug => SnippetState.Fetching): SnippetState = this match {
+    case SnippetState.Fetching(slug) => f(slug)
+    case s                           => s
+  }
+}
 enum Page {
   case Home(data: List[api.Snippet])
-  case Snippet(snippet: Option[api.Snippet])
+  case Snippet(state: SnippetState)
 
   def mapHome(f: Page.Home => Page.Home): Page = this match {
     case h: Home    => f(h)
     case s: Snippet => s
+  }
+
+  def mapSnippet(f: Page.Snippet => Page.Snippet): Page = this match {
+    case h: Home    => h
+    case s: Snippet => f(s)
   }
 }
 
@@ -70,9 +88,9 @@ object FrontendMain extends TyrianIOApp[Msg, Model] {
 
   def view(model: Model): Html[Msg] =
     model.page.match {
-      case Page.Home(data)          => viewHome(data)
-      case Page.Snippet(None)       => viewSnippetPlaceholder
-      case Page.Snippet(Some(snip)) => viewSnippet(snip)
+      case Page.Home(data)                                  => viewHome(data)
+      case Page.Snippet(SnippetState.Fetching(placeholder)) => viewSnippetPlaceholder(placeholder)
+      case Page.Snippet(SnippetState.Fetched(snip))         => viewSnippet(snip)
     }
 
   private def viewGeneric(content: Elem[Msg]*) =
@@ -214,10 +232,10 @@ object FrontendMain extends TyrianIOApp[Msg, Model] {
     div(className := "block")(pre(snippet.code)),
   )
 
-  private def viewSnippetPlaceholder = viewGeneric(
+  private def viewSnippetPlaceholder(slug: Slug) = viewGeneric(
     header(
       text("Scala."),
-      viewSlug(Slug("x" * 10 /* TODO magic number */ )),
+      viewSlug(slug),
       text(".beauty"),
     )
   )
@@ -229,7 +247,7 @@ object FrontendMain extends TyrianIOApp[Msg, Model] {
 
     case Msg.OpenSnippet(id) =>
       (
-        model.copy(page = Page.Snippet(None)),
+        model.copy(page = Page.Snippet(SnippetState.Fetching(id))),
         Cmd.emit(Msg.SetTitle("Scala.beauty - loading snippet " + id.hashed))
           |+| Cmd
             .Run(ScalaBeautyApi[IO].getSnippet(id))
@@ -237,8 +255,13 @@ object FrontendMain extends TyrianIOApp[Msg, Model] {
       )
 
     case Msg.OpenedSnippet(snippet) =>
+      // important: this message is only relevant at snippet.
+      // this is still broken if you jump between home and snippet many times fast: the older snippet may load
+      // we could fix this if the state contained some requestId of some sort and it matched what we got here...
+      // ...or we can try to make the fetches subscriptions instead of commands, which will allow cancelling them
       (
-        model.copy(page = Page.Snippet(Some(snippet))),
+        model
+          .mapPage(_.mapSnippet(s => s.copy(state = SnippetState.Fetched(snippet)))),
         Cmd.emit(Msg.SetTitle("Scala.beauty - snippet " + snippet.id.hashed)),
       )
 
@@ -263,11 +286,24 @@ object FrontendMain extends TyrianIOApp[Msg, Model] {
           org.scalajs.dom.document.title = title
         },
       )
+    case Msg.UpdateHash(hash) =>
+      // I really need lenses... and some OOP
+      model.mapPage(
+        _.mapSnippet(s => s.copy(state = s.state.mapFetching(_ => SnippetState.Fetching(hash))))
+      ) -> Cmd.None
 
     case Msg.NoOp => (model, Cmd.None)
   }
 
-  def subscriptions(model: Model): Sub[IO, Msg] = Sub.None
+  def subscriptions(model: Model): Sub[IO, Msg] =
+    model.page.match {
+      case Page.Snippet(SnippetState.Fetching(_)) =>
+        Sub.every[IO](1.second / 20 /* todo config */ ).map(_ => Msg.UpdateHash(mkSlug(10)))
+      case _ => Sub.None
+    }
+
+    // todo share with backend
+  private def mkSlug(len: Int) = Slug(scala.util.Random.alphanumeric.take(len).mkString.toLowerCase())
 
   def router: Location => Msg = {
     case loc: Location.External =>
