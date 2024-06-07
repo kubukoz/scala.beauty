@@ -27,7 +27,7 @@ object ScalaBeautyApiImpl {
           )
 
     def getSnippet(id: Slug): IO[GetSnippetOutput] =
-      IO.println("Received request to get snippet") *>
+      IO.println("Received request to get snippet " + id.value) *>
         IO {
           GetSnippetOutput {
             Snippet(

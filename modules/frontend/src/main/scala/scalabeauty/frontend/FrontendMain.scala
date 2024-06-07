@@ -26,11 +26,18 @@ enum Msg {
   case SetTitle(title: String)
 }
 
-case class Model(page: Page)
+case class Model(page: Page) {
+  def mapPage(f: Page => Page): Model = copy(page = f(page))
+}
 
 enum Page {
   case Home(data: List[api.Snippet])
   case Snippet(snippet: Option[api.Snippet])
+
+  def mapHome(f: Page.Home => Page.Home): Page = this match {
+    case h: Home    => f(h)
+    case s: Snippet => s
+  }
 }
 
 @JSExportTopLevel("TyrianApp")
@@ -149,46 +156,10 @@ object FrontendMain extends TyrianIOApp[Msg, Model] {
   )
 
   def update(model: Model): Msg => (Model, Cmd[IO, Msg]) = {
-    val handlePerPage: PartialFunction[Msg, (Model, Cmd[IO, Msg])] = model.page.match {
-      case _: Page.Home => updateHome(model)
-      case _: Page.Snippet => { case Msg.OpenedSnippet(snippet) =>
-        (
-          model.copy(page = Page.Snippet(Some(snippet))),
-          Cmd.emit(Msg.SetTitle("Scala.beauty - snippet " + snippet.id.hashed)),
-        )
-      }
-    }
+    case Msg.GotSnippets(data) =>
+      // important: this message is only relevant at home
+      (model.mapPage(_.mapHome(_.copy(data = data))), Cmd.None)
 
-    msg =>
-      handlePerPage.applyOrElse(
-        msg,
-        {
-          case Msg.NavigateTo(externalUrl) => (model, Nav.loadUrl(externalUrl))
-          case Msg.NewTab(url) =>
-            (
-              model,
-              // Workaround for Tyrian capturing clicks on anchors
-              // even if they're new tabs
-              Cmd.SideEffect {
-                org.scalajs.dom.window.open(url, "_blank").focus()
-              },
-            )
-          case Msg.GoHome           => initialize
-          case Msg.GoHomeResetState => initialize.fmap(_ |+| Nav.pushUrl("/"))
-          case Msg.SetTitle(title) =>
-            (
-              model,
-              Cmd.SideEffect {
-                org.scalajs.dom.document.title = title
-              },
-            )
-          case _ => (model, Cmd.None)
-        },
-      )
-  }
-
-  private def updateHome(model: Model): PartialFunction[Msg, (Model, Cmd[IO, Msg])] = {
-    case Msg.GotSnippets(data) => (model.copy(page = Page.Home(data)), Cmd.None)
     case Msg.OpenSnippet(id) =>
       (
         model.copy(page = Page.Snippet(None)),
@@ -197,6 +168,36 @@ object FrontendMain extends TyrianIOApp[Msg, Model] {
             .Run(ScalaBeautyApi[IO].getSnippet(id))
             .map(output => Msg.OpenedSnippet(output.snippet)),
       )
+
+    case Msg.OpenedSnippet(snippet) =>
+      (
+        model.copy(page = Page.Snippet(Some(snippet))),
+        Cmd.emit(Msg.SetTitle("Scala.beauty - snippet " + snippet.id.hashed)),
+      )
+
+    case Msg.NavigateTo(externalUrl) => (model, Nav.loadUrl(externalUrl))
+
+    case Msg.NewTab(url) =>
+      (
+        model,
+        // Workaround for Tyrian capturing clicks on anchors
+        // even if they're new tabs
+        Cmd.SideEffect {
+          org.scalajs.dom.window.open(url, "_blank").focus()
+        },
+      )
+
+    case Msg.GoHome           => initialize
+    case Msg.GoHomeResetState => initialize.fmap(_ |+| Nav.pushUrl("/"))
+    case Msg.SetTitle(title) =>
+      (
+        model,
+        Cmd.SideEffect {
+          org.scalajs.dom.document.title = title
+        },
+      )
+
+    case Msg.NoOp => (model, Cmd.None)
   }
 
   def subscriptions(model: Model): Sub[IO, Msg] = Sub.None
