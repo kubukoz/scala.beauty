@@ -49,6 +49,7 @@ val backend = module
       "com.disneystreaming.smithy4s" %% "smithy4s-http4s"         % smithy4s.codegen.BuildInfo.version,
       "com.disneystreaming.smithy4s" %% "smithy4s-http4s-swagger" % smithy4s.codegen.BuildInfo.version,
       "org.http4s"                   %% "http4s-ember-server"     % "0.23.27",
+      "org.tpolecat"                 %% "skunk-core"              % "0.6.4",
     ),
     fork := true,
   )
