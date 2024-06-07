@@ -26,7 +26,7 @@ enum Msg {
   case SetTitle(title: String)
 }
 
-case class Model(page: Page, title: String)
+case class Model(page: Page)
 
 enum Page {
   case Home(data: List[api.Snippet])
@@ -54,16 +54,17 @@ object FrontendMain extends TyrianIOApp[Msg, Model] {
 
   private def initialize: (Model, Cmd[IO, Msg]) =
     (
-      Model(Page.Home(Nil), "Scala.beauty"),
-      Cmd
-        .Run(ScalaBeautyApi[IO].getSnippets(None, None))
-        .map(out => Msg.GotSnippets(out.snippets)),
+      Model(Page.Home(Nil)),
+      Cmd.emit(Msg.SetTitle("Scala.beauty"))
+        |+| Cmd
+          .Run(ScalaBeautyApi[IO].getSnippets(None, None))
+          .map(out => Msg.GotSnippets(out.snippets)),
     )
 
   def view(model: Model): Html[Msg] =
     model.page.match {
       case h: Page.Home             => viewHome(h)
-      case Page.Snippet(None)       => div("loading snippet...")
+      case Page.Snippet(None)       => viewSnippetPlaceholder
       case Page.Snippet(Some(snip)) => viewSnippet(snip)
     }
 
@@ -91,12 +92,12 @@ object FrontendMain extends TyrianIOApp[Msg, Model] {
               a(href := "/snippet/" + snippet.id)(
                 div(className := "box")(
                   div(className := "block")(
-                    span(className := "has-text-grey")(snippet.id.hashed),
+                    viewSlug(snippet.id),
                     text(" by "),
                     viewAuthor(snippet.author),
                   ),
                   p(className := "block")(i(snippet.description)),
-                  div(className := "block")(pre(snippet.code)),
+                  div(className := "block")(pre(code(snippet.code))),
                 )
               )
             )
@@ -105,6 +106,7 @@ object FrontendMain extends TyrianIOApp[Msg, Model] {
         ),
     )
 
+  def viewSlug(slug: Slug)               = span(className := "has-text-grey is-family-monospace")(slug.hashed)
   extension (s: Slug) def hashed: String = "#" + s.value
 
   private def header(items: Elem[Msg]*) =
@@ -127,7 +129,7 @@ object FrontendMain extends TyrianIOApp[Msg, Model] {
   private def viewSnippet(snippet: Snippet) = viewGeneric(
     header(
       text("Scala."),
-      span(className := "has-text-grey")(snippet.id.hashed),
+      viewSlug(snippet.id),
       text(".beauty"),
     ),
     subtitle(
@@ -136,6 +138,14 @@ object FrontendMain extends TyrianIOApp[Msg, Model] {
     ),
     p(className := "block")(i(snippet.description)),
     div(className := "block")(pre(snippet.code)),
+  )
+
+  private def viewSnippetPlaceholder = viewGeneric(
+    header(
+      text("Scala."),
+      viewSlug(Slug("x" * 10 /* TODO magic number */ )),
+      text(".beauty"),
+    )
   )
 
   def update(model: Model): Msg => (Model, Cmd[IO, Msg]) = {
@@ -170,7 +180,6 @@ object FrontendMain extends TyrianIOApp[Msg, Model] {
               model,
               Cmd.SideEffect {
                 org.scalajs.dom.document.title = title
-
               },
             )
           case _ => (model, Cmd.None)
@@ -183,14 +192,10 @@ object FrontendMain extends TyrianIOApp[Msg, Model] {
     case Msg.OpenSnippet(id) =>
       (
         model.copy(page = Page.Snippet(None)),
-        Cmd.emit(Msg.SetTitle("Scala.beauty - loading snippet " + id.hashed)) |+|
-          Cmd.Run(
-            ScalaBeautyApi[IO]
-              .getSnippet(id)
-              .map { output =>
-                Msg.OpenedSnippet(output.snippet)
-              }
-          ),
+        Cmd.emit(Msg.SetTitle("Scala.beauty - loading snippet " + id.hashed))
+          |+| Cmd
+            .Run(ScalaBeautyApi[IO].getSnippet(id))
+            .map(output => Msg.OpenedSnippet(output.snippet)),
       )
   }
 
