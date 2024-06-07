@@ -9,6 +9,7 @@ service ScalaBeautyApi {
     version: "v1"
     operations: [
         GetSnippets
+        GetSnippet
     ]
 }
 
@@ -27,6 +28,22 @@ operation GetSnippets {
         @httpPayload
         @required
         snippets: Snippets
+    }
+}
+
+@http(method: "GET", uri: "/snippets/{id}")
+@readonly
+operation GetSnippet {
+    input := {
+        @httpLabel
+        @required
+        id: Slug
+    }
+
+    output := {
+        @httpPayload
+        @required
+        snippet: Snippet
     }
 }
 
