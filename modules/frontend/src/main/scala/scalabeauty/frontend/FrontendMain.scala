@@ -326,13 +326,13 @@ object FrontendMain extends TyrianIOApp[Msg, Model] {
       .match {
         case Page.Snippet(state, _) =>
           state.match {
-            case SnippetState.Fetching         => Mask.Model.Pending
-            case SnippetState.Fetched(_, size) => Mask.Model.Fetched(size)
+            case SnippetState.Fetching         => Masked.Model.Pending
+            case SnippetState.Fetched(_, size) => Masked.Model.Fetched(size)
           }.some
         case Page.Home(data) => none
       }
       .foldMap(
-        Mask.subscriptions(_)(
+        Masked.subscriptions(_)(
           onShorten = Msg.ShortenMask,
           onUpdate = Msg.UpdatePlaceholder(mkSlug(10)),
         )

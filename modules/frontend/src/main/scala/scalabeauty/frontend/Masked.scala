@@ -1,11 +1,11 @@
 package scalabeauty.frontend
+
 import cats.effect.IO
-import scalabeauty.api.Slug
 import tyrian.Sub
 
 import scala.concurrent.duration.*
 
-object Mask {
+object Masked {
   enum Model {
     case Pending
     case Fetched(maskSize: Int)
