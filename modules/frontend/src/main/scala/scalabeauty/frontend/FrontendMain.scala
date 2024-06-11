@@ -13,7 +13,6 @@ import tyrian.*
 import tyrian.Html.*
 
 import scala.annotation.nowarn
-import scala.concurrent.duration.{span => _, *}
 import scala.scalajs.js.annotation.JSExportTopLevel
 
 enum Msg {
@@ -299,6 +298,7 @@ object FrontendMain extends TyrianIOApp[Msg, Model] {
 
     // For some (probably reasonable) reason, this gets hit twice when you go directly to home.
     // TODO: check if the model is already fetching the data?
+    // (or move the IO calls to subscriptions, which should hopefully do just that)
     case Msg.GoHome           => initialize
     case Msg.GoHomeResetState => initialize.fmap(_ |+| Nav.pushUrl("/"))
     case Msg.SetTitle(title) =>
@@ -322,22 +322,21 @@ object FrontendMain extends TyrianIOApp[Msg, Model] {
   }
 
   def subscriptions(model: Model): Sub[IO, Msg] =
-    model.page.match {
-      case Page.Snippet(s, _) =>
-        val updatePlaceholder = Sub.every[IO](1.second / 60).map(_ => Msg.UpdatePlaceholder(mkSlug(10)))
-
-        s.match {
-          case SnippetState.Fetching => updatePlaceholder
-
-          case SnippetState.Fetched(snippet, maskSize) if maskSize > 0 =>
-            updatePlaceholder |+| Sub.every[IO](1.second / 20).map(_ => Msg.ShortenMask)
-
-          case SnippetState.Fetched(_, _) =>
-            Sub.None
-        }
-      case _ =>
-        Sub.None
-    }
+    model.page
+      .match {
+        case Page.Snippet(state, _) =>
+          state.match {
+            case SnippetState.Fetching         => Mask.Model.Pending
+            case SnippetState.Fetched(_, size) => Mask.Model.Fetched(size)
+          }.some
+        case Page.Home(data) => none
+      }
+      .foldMap(
+        Mask.subscriptions(_)(
+          onShorten = Msg.ShortenMask,
+          onUpdate = Msg.UpdatePlaceholder(mkSlug(10)),
+        )
+      )
 
   // todo share with backend
   // todo side effects
