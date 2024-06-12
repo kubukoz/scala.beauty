@@ -9,6 +9,7 @@ import org.http4s.ember.server.EmberServerBuilder
 import scalabeauty.api.*
 import skunk.Session
 import smithy4s.http4s.SimpleRestJsonBuilder
+import smithy4s.Timestamp
 
 import scala.util.Random
 
@@ -62,6 +63,7 @@ object BackendMain extends IOApp.Simple {
         author = Author.github(GithubAuthor(username = "kubukoz")),
         description = "My snippet",
         code = """def hello = println("foobar!")""",
+        createdAt = Timestamp.nowUTC(),
       )
     }
 

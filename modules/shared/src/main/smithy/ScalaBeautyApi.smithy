@@ -71,6 +71,10 @@ structure Snippet {
 
     @required
     author: Author
+
+    @required
+    @timestampFormat("date-time")
+    createdAt: Timestamp
 }
 
 union Author {
