@@ -34,9 +34,8 @@ val frontend = module
   .enablePlugins(ScalaJSPlugin)
   .settings(
     libraryDependencies ++= Seq(
-      "io.indigoengine"              %%% "tyrian-io"       % "0.10.0",
-      "org.http4s"                   %%% "http4s-dom"      % "0.2.8",
-      "com.disneystreaming.smithy4s" %%% "smithy4s-http4s" % smithy4s.codegen.BuildInfo.version,
+      "io.indigoengine" %%% "tyrian-io"      % "0.10.0",
+      "tech.neander"    %%% "smithy4s-fetch" % "0.0.3",
     ),
     scalaJSLinkerConfig ~= { _.withModuleKind(ModuleKind.ESModule) },
   )
