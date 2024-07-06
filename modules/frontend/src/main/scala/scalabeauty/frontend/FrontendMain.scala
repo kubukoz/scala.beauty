@@ -16,6 +16,8 @@ import tyrian.Html.*
 import scala.annotation.nowarn
 import scala.scalajs.js.annotation.JSExportTopLevel
 
+import HtmlUtils.*
+
 enum Msg {
   // todo rename
   case GotSnippets(data: List[RichSnippet], pagination: api.Pagination)
@@ -46,7 +48,26 @@ enum SnippetState {
   }
 }
 
-case class RichSnippet(base: api.Snippet, codeHtml: String)
+case class RichSnippet(
+    id: Slug,
+    description: String,
+    code: String,
+    author: Author,
+    createdAt: Timestamp,
+    codeHtml: String,
+)
+
+object RichSnippet {
+  def fromApi(base: api.Snippet, codeHtml: String): RichSnippet = RichSnippet(
+    base.id,
+    base.description,
+    base.code,
+    base.author,
+    base.createdAt,
+    codeHtml,
+  )
+}
+
 enum Page {
   case Home(data: List[RichSnippet], pagination: Option[api.Pagination])
   case Snippet(state: SnippetState, placeholderSlug: Slug)
@@ -85,7 +106,7 @@ object FrontendMain extends TyrianIOApp[Msg, Model] {
   private def attachCode(snippet: Snippet): IO[RichSnippet] =
     Shiki
       .codeToHtml(snippet.code, "scala", "catppuccin-macchiato")
-      .map(RichSnippet(snippet, _))
+      .map(RichSnippet.fromApi(snippet, _))
 
   private def initialize(page: Option[api.Page]): (Model, Cmd[IO, Msg]) =
     (
@@ -105,11 +126,10 @@ object FrontendMain extends TyrianIOApp[Msg, Model] {
 
   def view(model: Model): Html[Msg] =
     model.page.match {
-      case Page.Home(data, pagination)                                     => viewHome(data, pagination)
-      case Page.Snippet(SnippetState.Fetching, placeholder)                => viewSnippetPlaceholder(placeholder)
+      case Page.Home(data, pagination)                      => viewHome(data, pagination)
+      case Page.Snippet(SnippetState.Fetching, placeholder) => viewSnippetPlaceholder(placeholder)
       case Page.Snippet(SnippetState.Fetched(snip, maskSize), placeholder) =>
-        // in desperate need of lenses... or better code
-        viewSnippet(snip.copy(base = snip.base.copy(id = snip.base.id.mask(placeholder.takeRight(maskSize)))))
+        viewSnippet(snip.copy(id = snip.id.mask(placeholder.takeRight(maskSize))))
     }
 
   private def viewGeneric(content: Elem[Msg]*) =
@@ -121,7 +141,7 @@ object FrontendMain extends TyrianIOApp[Msg, Model] {
           className := "container"
         )(content.toList)
       ),
-      viewFooter,
+      Footer.view,
     )
 
   private def viewHome(data: List[RichSnippet], pagination: Option[api.Pagination]) =
@@ -141,7 +161,7 @@ object FrontendMain extends TyrianIOApp[Msg, Model] {
           ul(className := "block")(
             data.map { snippet =>
               li(className := "block")(
-                a(href := "/snippet/" + snippet.base.id)(
+                a(href := "/snippet/" + snippet.id)(
                   viewSnippetBox(snippet)
                 )
               )
@@ -159,38 +179,17 @@ object FrontendMain extends TyrianIOApp[Msg, Model] {
     div(className := "box")(
       div(className := "block is-flex is-justify-content-space-between")(
         div(
-          viewSlug(snippet.base.id),
+          viewSlug(snippet.id),
           text(" by "),
-          viewAuthor(snippet.base.author),
+          viewAuthor(snippet.author),
         ),
         div(
           text("on "),
-          viewDate(snippet.base.createdAt),
+          viewDate(snippet.createdAt),
         ),
       ),
-      p(className := "block")(i(snippet.base.description)),
+      p(className := "block")(i(snippet.description)),
       div(className := "block")().innerHtml(snippet.codeHtml),
-    )
-
-  private def viewFooter =
-    footer(
-      className := "footer is-flex-align-items-flex-end mt-auto"
-    )(
-      div(className := "content has-text-centered")(
-        text("Built with "),
-        a(linkAttrs("https://scala-lang.org"))("Scala"),
-        text(", "),
-        a(linkAttrs("https://www.scala-js.org"))("Scala.js"),
-        text(", "),
-        a(linkAttrs("https://tyrian.indigoengine.io"))("Tyrian"),
-        text(", "),
-        a(linkAttrs("https://disneystreaming.github.io/smithy4s"))("Smithy4s"),
-        text(", "),
-        a(linkAttrs("https://bulma.io"))("Bulma"),
-        text(" and "),
-        a(linkAttrs("https://http4s.org"))("http4s"),
-        text("."),
-      )
     )
 
   def viewSlug(slug: Slug) = span(className := "has-text-grey is-family-monospace")(slug.hashed)
@@ -227,11 +226,6 @@ object FrontendMain extends TyrianIOApp[Msg, Model] {
       className := "subtitle"
     )(items.toList)
 
-  private def linkAttrs(url: String) = List(
-    href := url,
-    onClick(Msg.NewTab(url)),
-  )
-
   private def viewAuthor(author: Author) = author.match { case GithubCase(github) =>
     val url = show"https://github.com/${github.username}"
     a(linkAttrs(url))(
@@ -242,18 +236,18 @@ object FrontendMain extends TyrianIOApp[Msg, Model] {
   private def viewSnippet(snippet: RichSnippet) = viewGeneric(
     header(
       text("Scala."),
-      viewSlug(snippet.base.id),
+      viewSlug(snippet.id),
       text(".beauty"),
     ),
     subtitle(
       text(" by "),
-      viewAuthor(snippet.base.author),
+      viewAuthor(snippet.author),
     ),
     div(className := "subtitle is-6")(
       text("on "),
-      viewDate(snippet.base.createdAt),
+      viewDate(snippet.createdAt),
     ),
-    p(className := "block")(i(snippet.base.description)),
+    p(className := "block")(i(snippet.description)),
     div(className := "block")().innerHtml(snippet.codeHtml),
   )
 
@@ -294,9 +288,9 @@ object FrontendMain extends TyrianIOApp[Msg, Model] {
       (
         model
           .mapPage(
-            _.mapSnippet(s => s.copy(state = SnippetState.Fetched(snippet, maskSize = snippet.base.id.value.length)))
+            _.mapSnippet(s => s.copy(state = SnippetState.Fetched(snippet, maskSize = snippet.id.value.length)))
           ),
-        Cmd.emit(Msg.SetTitle("Scala.beauty - snippet " + snippet.base.id.hashed)),
+        Cmd.emit(Msg.SetTitle("Scala.beauty - snippet " + snippet.id.hashed)),
       )
 
     case Msg.NavigateTo(externalUrl) => (model, Nav.loadUrl(externalUrl))
