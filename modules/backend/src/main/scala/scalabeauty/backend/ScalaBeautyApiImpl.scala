@@ -10,7 +10,10 @@ object ScalaBeautyApiImpl {
 
       def getSnippets(page: Option[Page]): IO[GetSnippetsOutput] =
         (
-          repo.getAll(offset = page.getOrElse(Page(0)).value, limit = pageSize),
+          repo.getAll(
+            offset = page.getOrElse(Page(0)).value * pageSize,
+            limit = pageSize,
+          ),
           repo.countAll().map(calcPageCount(pageSize, _)),
         ).parMapN { (snippets, pageCount) =>
           GetSnippetsOutput(

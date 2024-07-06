@@ -1,6 +1,7 @@
 package scalabeauty.backend
 
 import cats.effect.IO
+import cats.syntax.all.*
 import scalabeauty.api.GetSnippetOutput
 import scalabeauty.api.GetSnippetsOutput
 import scalabeauty.api.Page
@@ -64,6 +65,25 @@ object ApiImplTests extends SimpleIOSuite {
           Pagination(currentPage = Page(0), totalPages = Page(2)),
           result.pagination,
         )
+      }
+  }
+
+  apiTest("query: page 0") {
+    val items = List.tabulate(20)(sampleSnippet)
+
+    repo.insert(items) *>
+      (
+        api.getSnippets(page = None),
+        api.getSnippets(page = Some(Page(0))),
+      ).mapN(assert.same(_, _))
+  }
+
+  apiTest("query: last page may be trimmed") {
+    val items = List.tabulate(25)(sampleSnippet)
+
+    repo.insert(items) *>
+      api.getSnippets(page = Some(Page(2))).map { result =>
+        expect.same(5, result.snippets.size)
       }
   }
 
