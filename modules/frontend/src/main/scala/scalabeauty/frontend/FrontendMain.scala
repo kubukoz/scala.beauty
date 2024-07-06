@@ -6,7 +6,7 @@ import org.http4s.client.Client
 import org.http4s.dom.FetchClientBuilder
 import org.http4s.implicits.*
 import scalabeauty.api
-import scalabeauty.api.*
+import scalabeauty.api.{Pagination as _, *}
 import scalabeauty.api.Author.GithubCase
 import smithy4s.http4s.SimpleRestJsonBuilder
 import smithy4s.Timestamp
@@ -18,7 +18,7 @@ import scala.scalajs.js.annotation.JSExportTopLevel
 
 enum Msg {
   // todo rename
-  case GotSnippets(data: List[RichSnippet])
+  case GotSnippets(data: List[RichSnippet], pagination: api.Pagination)
   case NavigateTo(url: String)
   case NewTab(url: String)
   case OpenSnippet(id: Slug)
@@ -48,7 +48,7 @@ enum SnippetState {
 
 case class RichSnippet(base: api.Snippet, codeHtml: String)
 enum Page {
-  case Home(data: List[RichSnippet])
+  case Home(data: List[RichSnippet], pagination: Option[api.Pagination])
   case Snippet(state: SnippetState, placeholderSlug: Slug)
 
   def mapHome(f: Page.Home => Page.Home): Page = this match {
@@ -89,19 +89,23 @@ object FrontendMain extends TyrianIOApp[Msg, Model] {
 
   private def initialize: (Model, Cmd[IO, Msg]) =
     (
-      Model(Page.Home(Nil)),
+      Model(Page.Home(Nil, None)),
       Cmd.emit(Msg.SetTitle("Scala.beauty"))
         |+| Cmd
-          .Run(ScalaBeautyApi[IO].getSnippets(None).flatMap { output =>
-            output.snippets
-              .traverse(attachCode)
-          })
-          .map(out => Msg.GotSnippets(out)),
+          .Run(
+            ScalaBeautyApi[IO]
+              .getSnippets(None)
+              .flatMap { output =>
+                output.snippets
+                  .traverse(attachCode)
+                  .map(Msg.GotSnippets(_, output.pagination))
+              }
+          ),
     )
 
   def view(model: Model): Html[Msg] =
     model.page.match {
-      case Page.Home(data)                                                 => viewHome(data)
+      case Page.Home(data, pagination)                                     => viewHome(data, pagination)
       case Page.Snippet(SnippetState.Fetching, placeholder)                => viewSnippetPlaceholder(placeholder)
       case Page.Snippet(SnippetState.Fetched(snip, maskSize), placeholder) =>
         // in desperate need of lenses... or better code
@@ -120,7 +124,7 @@ object FrontendMain extends TyrianIOApp[Msg, Model] {
       viewFooter,
     )
 
-  private def viewHome(data: List[RichSnippet]) =
+  private def viewHome(data: List[RichSnippet], pagination: Option[api.Pagination]) =
     viewGeneric(
       header(text("Scala.beauty")),
       subtitle(
@@ -143,8 +147,11 @@ object FrontendMain extends TyrianIOApp[Msg, Model] {
               )
 
             }
-          ),
-          viewPagination,
+          ) ::
+            pagination
+              .map(Pagination.getPaginationBlocks(_))
+              .map(Pagination.view)
+              .toList
         ),
     )
 
@@ -163,38 +170,6 @@ object FrontendMain extends TyrianIOApp[Msg, Model] {
       ),
       p(className := "block")(i(snippet.base.description)),
       div(className := "block")().innerHtml(snippet.codeHtml),
-    )
-
-  private def viewPagination =
-    nav(
-      className := "pagination block is-centered",
-      role      := "navigation",
-    )(
-      ul(className := "pagination-list")(
-        li(
-          a(className := "pagination-link")("1")
-        ),
-        li(
-          span(className := "pagination-ellipsis")("…")
-        ),
-        li(
-          a(className := "pagination-link")("45")
-        ),
-        li(
-          a(
-            className := "pagination-link is-current"
-          )("46")
-        ),
-        li(
-          a(className := "pagination-link")("47")
-        ),
-        li(
-          span(className := "pagination-ellipsis")("…")
-        ),
-        li(
-          a(className := "pagination-link")("86")
-        ),
-      )
     )
 
   private def viewFooter =
@@ -298,9 +273,9 @@ object FrontendMain extends TyrianIOApp[Msg, Model] {
   }
 
   def update(model: Model): Msg => (Model, Cmd[IO, Msg]) = {
-    case Msg.GotSnippets(data) =>
+    case Msg.GotSnippets(data, pagination) =>
       // important: this message is only relevant at home
-      (model.mapPage(_.mapHome(_.copy(data = data))), Cmd.None)
+      (model.mapPage(_.mapHome(_.copy(data = data, pagination = Some(pagination)))), Cmd.None)
 
     case Msg.OpenSnippet(id) =>
       (
@@ -369,7 +344,7 @@ object FrontendMain extends TyrianIOApp[Msg, Model] {
             case SnippetState.Fetching         => Masked.Model.Pending
             case SnippetState.Fetched(_, size) => Masked.Model.Fetched(size)
           }.some
-        case Page.Home(data) => none
+        case Page.Home(_, _) => none
       }
       .foldMap(
         Masked.subscriptions(_)(
