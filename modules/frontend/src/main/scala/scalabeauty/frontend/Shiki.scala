@@ -1,7 +1,5 @@
 package scalabeauty.frontend
 
-import scalabeauty.api
-
 import scala.scalajs.js
 import scala.scalajs.js.annotation.*
 
