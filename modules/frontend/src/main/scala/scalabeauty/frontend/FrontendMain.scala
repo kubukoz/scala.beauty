@@ -22,7 +22,7 @@ enum Msg {
   case NavigateTo(url: String)
   case NewTab(url: String)
   case OpenSnippet(id: Slug)
-  case GoHome
+  case GoHome(page: Option[api.Page])
   case GoHomeResetState
   // todo rename
   case OpenedSnippet(snippet: RichSnippet)
@@ -80,21 +80,21 @@ object FrontendMain extends TyrianIOApp[Msg, Model] {
     c.run(amendedRequest)
   }
 
-  def init(flags: Map[String, String]): (Model, Cmd[IO, Msg]) = initialize
+  def init(flags: Map[String, String]): (Model, Cmd[IO, Msg]) = initialize(page = None)
 
   private def attachCode(snippet: Snippet): IO[RichSnippet] =
     Shiki
       .codeToHtml(snippet.code, "scala", "catppuccin-macchiato")
       .map(RichSnippet(snippet, _))
 
-  private def initialize: (Model, Cmd[IO, Msg]) =
+  private def initialize(page: Option[api.Page]): (Model, Cmd[IO, Msg]) =
     (
       Model(Page.Home(Nil, None)),
       Cmd.emit(Msg.SetTitle("Scala.beauty"))
         |+| Cmd
           .Run(
             ScalaBeautyApi[IO]
-              .getSnippets(None)
+              .getSnippets(page)
               .flatMap { output =>
                 output.snippets
                   .traverse(attachCode)
@@ -314,8 +314,8 @@ object FrontendMain extends TyrianIOApp[Msg, Model] {
     // For some (probably reasonable) reason, this gets hit twice when you go directly to home.
     // TODO: check if the model is already fetching the data?
     // (or move the IO calls to subscriptions, which should hopefully do just that)
-    case Msg.GoHome           => initialize
-    case Msg.GoHomeResetState => initialize.fmap(_ |+| Nav.pushUrl("/"))
+    case Msg.GoHome(page)     => initialize(page)
+    case Msg.GoHomeResetState => initialize(None).fmap(_ |+| Nav.pushUrl("/"))
     case Msg.SetTitle(title) =>
       (
         model,
@@ -365,8 +365,17 @@ object FrontendMain extends TyrianIOApp[Msg, Model] {
       loc.pathName.match {
         case s"/snippet/${id}"  => Msg.OpenSnippet(Slug(id))
         case s"/snippet/${id}/" => Msg.OpenSnippet(Slug(id))
-        case "/" | ""           => Msg.GoHome
-        case _                  => Msg.GoHomeResetState
+        case "/" | "" =>
+          println("search: " + loc.search)
+          Msg.GoHome {
+            loc.search
+              .collectFirst { case s"?page=$page" =>
+                page.toIntOption
+              }
+              .flatten
+              .map(api.Page(_))
+          }
+        case _ => Msg.GoHomeResetState
       }
   }
 }

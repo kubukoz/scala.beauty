@@ -22,7 +22,7 @@ object Pagination {
 
   def getPaginationBlocks(p: api.Pagination): List[Block] =
     getPaginationBlocks(
-      current = p.currentPage.value + 1,
+      current = p.currentPage.value,
       total = p.totalPages.value,
     )
 
@@ -33,17 +33,24 @@ object Pagination {
     // current page and 1 page before / after always visible
     // ellipsis in between if there's a gap.
     // if total pages <= 5, all pages visible
+    val numbersToShow = List
+      .concat(
+        // first page
+        List(0L),
 
-    val firstPage = 1L
-    val lastPage  = total
+        // previous
+        List(current - 1).filter(_ >= 0),
 
-    val currentAndSurrounding = List.concat(
-      if current > 2 then List(current - 1) else Nil,
-      if current != 1L && current != total then List(current) else Nil,
-      if current < (total - 1) then List(current + 1) else Nil,
-    )
+        // current
+        List(current).filterNot(_ == 0).filterNot(_ == total),
 
-    val numbersToShow = (firstPage :: currentAndSurrounding ::: lastPage :: Nil).distinct
+        // next
+        List(current + 1).filter(_ < total),
+
+        // last
+        List(total - 1),
+      )
+      .distinct
 
     numbersToShow
       .align(numbersToShow.tail)
