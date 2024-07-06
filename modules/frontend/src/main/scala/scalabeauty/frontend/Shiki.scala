@@ -1,8 +1,6 @@
 package scalabeauty.frontend
 
 import scalabeauty.api
-import scalabeauty.api.*
-import tyrian.*
 
 import scala.scalajs.js
 import scala.scalajs.js.annotation.*
