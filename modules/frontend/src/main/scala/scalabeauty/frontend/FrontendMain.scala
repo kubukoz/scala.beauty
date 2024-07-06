@@ -83,18 +83,9 @@ object FrontendMain extends TyrianIOApp[Msg, Model] {
   def init(flags: Map[String, String]): (Model, Cmd[IO, Msg]) = initialize
 
   private def attachCode(snippet: Snippet): IO[RichSnippet] =
-    IO.fromPromise {
-      IO {
-        Shiki
-          .codeToHtml(
-            snippet.code,
-            scalajs.js.Dynamic.literal(
-              lang = "scala",
-              theme = "catppuccin-macchiato",
-            ),
-          )
-      }
-    }.map(RichSnippet(snippet, _))
+    Shiki
+      .codeToHtml(snippet.code, "scala", "catppuccin-macchiato")
+      .map(RichSnippet(snippet, _))
 
   private def initialize: (Model, Cmd[IO, Msg]) =
     (
