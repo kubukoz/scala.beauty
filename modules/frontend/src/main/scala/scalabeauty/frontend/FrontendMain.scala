@@ -7,7 +7,6 @@ import org.http4s.dom.FetchClientBuilder
 import org.http4s.implicits.*
 import scalabeauty.api
 import scalabeauty.api.{Pagination as _, *}
-import scalabeauty.api.Author.GithubCase
 import smithy4s.http4s.SimpleRestJsonBuilder
 import smithy4s.Timestamp
 import tyrian.*
@@ -126,10 +125,11 @@ object FrontendMain extends TyrianIOApp[Msg, Model] {
 
   def view(model: Model): Html[Msg] =
     model.page.match {
-      case Page.Home(data, pagination)                      => viewHome(data, pagination)
-      case Page.Snippet(SnippetState.Fetching, placeholder) => viewSnippetPlaceholder(placeholder)
+      case Page.Home(data, pagination) => viewHome(data, pagination)
+      case Page.Snippet(SnippetState.Fetching, placeholder) =>
+        viewGeneric(SnippetComponent.viewPlaceholder(placeholder))
       case Page.Snippet(SnippetState.Fetched(snip, maskSize), placeholder) =>
-        viewSnippet(snip.copy(id = snip.id.mask(placeholder.takeRight(maskSize))))
+        viewGeneric(SnippetComponent.view(snip.copy(id = snip.id.mask(placeholder.takeRight(maskSize))))*)
     }
 
   private def viewGeneric(content: Elem[Msg]*) =
@@ -146,7 +146,7 @@ object FrontendMain extends TyrianIOApp[Msg, Model] {
 
   private def viewHome(data: List[RichSnippet], pagination: Option[api.Pagination]) =
     viewGeneric(
-      header(text("Scala.beauty")),
+      heading(text("Scala.beauty")),
       subtitle(
         text("Latest Scala beauties:")
       ),
@@ -162,7 +162,7 @@ object FrontendMain extends TyrianIOApp[Msg, Model] {
             data.map { snippet =>
               li(className := "block")(
                 a(href := "/snippet/" + snippet.id)(
-                  viewSnippetBox(snippet)
+                  SnippetComponent.viewBox(snippet)
                 )
               )
 
@@ -174,90 +174,6 @@ object FrontendMain extends TyrianIOApp[Msg, Model] {
               .toList
         ),
     )
-
-  private def viewSnippetBox(snippet: RichSnippet) =
-    div(className := "box")(
-      div(className := "block is-flex is-justify-content-space-between")(
-        div(
-          viewSlug(snippet.id),
-          text(" by "),
-          viewAuthor(snippet.author),
-        ),
-        div(
-          text("on "),
-          viewDate(snippet.createdAt),
-        ),
-      ),
-      p(className := "block")(i(snippet.description)),
-      div(className := "block")().innerHtml(snippet.codeHtml),
-    )
-
-  def viewSlug(slug: Slug) = span(className := "has-text-grey is-family-monospace")(slug.hashed)
-
-  def viewDate(date: Timestamp) =
-    span(className := "has-text-grey is-family-monospace") {
-      val jsDate = date.toDate
-
-      // e.g. 2024-07-06
-      "%04d-%02d-%02d".format(
-        jsDate.getUTCFullYear(),
-        jsDate.getUTCMonth() + 1,
-        jsDate.getUTCDate(),
-      )
-    }
-
-  extension (s: Slug) {
-    def hashed: String          = "#" + s.value
-    def nonEmpty: Boolean       = s.value.nonEmpty
-    def takeRight(n: Int): Slug = Slug(s.value.takeRight(n))
-    def mask(another: Slug): Slug = {
-      val n = another.value.length
-      Slug(s.value.dropRight(n) + another.value)
-    }
-  }
-
-  private def header(items: Elem[Msg]*) =
-    h1(
-      className := "title"
-    )(items.toList)
-
-  private def subtitle(items: Elem[Msg]*) =
-    p(
-      className := "subtitle"
-    )(items.toList)
-
-  private def viewAuthor(author: Author) = author.match { case GithubCase(github) =>
-    val url = show"https://github.com/${github.username}"
-    a(linkAttrs(url))(
-      show"@${github.username}"
-    )
-  }
-
-  private def viewSnippet(snippet: RichSnippet) = viewGeneric(
-    header(
-      text("Scala."),
-      viewSlug(snippet.id),
-      text(".beauty"),
-    ),
-    subtitle(
-      text(" by "),
-      viewAuthor(snippet.author),
-    ),
-    div(className := "subtitle is-6")(
-      text("on "),
-      viewDate(snippet.createdAt),
-    ),
-    p(className := "block")(i(snippet.description)),
-    div(className := "block")().innerHtml(snippet.codeHtml),
-  )
-
-  private def viewSnippetPlaceholder(slug: Slug) = viewGeneric(
-    header(
-      text("Scala."),
-      viewSlug(slug),
-      text(".beauty"),
-    )
-  )
 
   @nowarn("msg=unused")
   private def logged[A, B](f: A => B): A => B = a => {
@@ -371,5 +287,15 @@ object FrontendMain extends TyrianIOApp[Msg, Model] {
           }
         case _ => Msg.GoHomeResetState
       }
+  }
+}
+
+extension (s: Slug) {
+  def hashed: String          = "#" + s.value
+  def nonEmpty: Boolean       = s.value.nonEmpty
+  def takeRight(n: Int): Slug = Slug(s.value.takeRight(n))
+  def mask(another: Slug): Slug = {
+    val n = another.value.length
+    Slug(s.value.dropRight(n) + another.value)
   }
 }
