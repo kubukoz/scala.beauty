@@ -69,7 +69,12 @@ object SnippetRepository {
       def insert(snippets: List[Snippet]): IO[Unit] =
         getSession.use {
           _.prepare(
-            sql"insert into snippets ($allFields) values ${codecs.snippet.values.list(snippets)}".command
+            sql"""insert into snippets ($allFields) values ${codecs.snippet.values.list(snippets)}
+                 |on conflict(id) do update set
+                 |description = EXCLUDED.description,
+                 |code = EXCLUDED.code,
+                 |author = EXCLUDED.author,
+                 |created_at = EXCLUDED.created_at""".stripMargin.command
           )
             .flatMap(_.execute(snippets))
         }.void
@@ -99,4 +104,23 @@ object SnippetRepository {
         }
     }
   }
+
+  val inMemory: IO[SnippetRepository] = IO.ref(Map.empty[Slug, Snippet]).map { ref =>
+    new SnippetRepository {
+      def createTable(): IO[Unit] = IO.unit
+
+      def insert(snippets: List[Snippet]): IO[Unit] = ref.update { old =>
+        snippets.foldLeft(old) { (acc, snippet) =>
+          acc.updated(snippet.id, snippet)
+        }
+      }
+
+      def getAll(offset: Long, limit: Int): IO[List[Snippet]] = ref.get.map(_.values.toList)
+
+      def countAll(): IO[Long] = ref.get.map(_.size.toLong)
+
+      def get(id: Slug): IO[Option[Snippet]] = ref.get.map(_.get(id))
+    }
+  }
+
 }
