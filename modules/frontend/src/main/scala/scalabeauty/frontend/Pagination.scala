@@ -74,10 +74,16 @@ object Pagination {
       ul(className := "pagination-list")(
         blocks.map {
           case Block.Ellipsis => li(span(className := "pagination-ellipsis")("…"))
-          case Block.PageNumber(number, current) =>
+          case Block.PageNumber(number, current) if current =>
+            li(
+              span(
+                className := "pagination-link is-current"
+              )(number.toString)
+            )
+          case Block.PageNumber(number, _) =>
             li(
               a(
-                className := s"pagination-link ${if current then "is-current" else ""}",
+                className := s"pagination-link",
                 href      := s"?page=$number",
               )(number.toString)
             )
