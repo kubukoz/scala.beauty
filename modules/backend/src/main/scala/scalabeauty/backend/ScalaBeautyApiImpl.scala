@@ -8,10 +8,25 @@ object ScalaBeautyApiImpl {
   def instance(repo: SnippetRepository): ScalaBeautyApi[IO] =
     new ScalaBeautyApi[IO] {
 
-      def getSnippets(before: Option[Slug], page: Option[Page]): IO[GetSnippetsOutput] =
-        repo
-          .getAll(before, page)
-          .map(GetSnippetsOutput(_))
+      def getSnippets(page: Option[Page]): IO[GetSnippetsOutput] = {
+        val pageSize = 100
+
+        (
+          repo.getAll(offset = page.getOrElse(Page(0)).value, limit = pageSize),
+          repo.countAll().map(calcPageCount(pageSize, _)),
+        ).parMapN { (snippets, pageCount) =>
+          GetSnippetsOutput(
+            snippets,
+            Pagination(
+              currentPage = page.getOrElse(Page(0)),
+              totalPages = Page(pageCount),
+            ),
+          )
+        }
+      }
+
+      private def calcPageCount(pageSize: Long, itemCount: Long): Long =
+        (itemCount.toDouble / pageSize).ceil.toLong
 
       def getSnippet(id: Slug): IO[GetSnippetOutput] =
         repo

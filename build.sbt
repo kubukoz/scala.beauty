@@ -9,7 +9,11 @@ val commonSettings = Seq(
   scalacOptions -= "-Xfatal-warnings",
   scalacOptions += "-no-indent",
   scalaVersion := scala3,
+  libraryDependencies ++= Seq(
+    "com.disneystreaming" %%% "weaver-cats" % "0.8.4" % Test
+  ),
 )
+
 def module(implicit name: sourcecode.Name) =
   Project(name.value, file("modules") / name.value)
     .settings(commonSettings)
@@ -46,10 +50,11 @@ val backend = module
   .enablePlugins(JavaAppPackaging, DockerPlugin)
   .settings(
     libraryDependencies ++= Seq(
-      "com.disneystreaming.smithy4s" %% "smithy4s-http4s"         % smithy4s.codegen.BuildInfo.version,
-      "com.disneystreaming.smithy4s" %% "smithy4s-http4s-swagger" % smithy4s.codegen.BuildInfo.version,
-      "org.http4s"                   %% "http4s-ember-server"     % "0.23.27",
-      "org.tpolecat"                 %% "skunk-core"              % "0.6.4",
+      "com.disneystreaming.smithy4s" %% "smithy4s-http4s"                 % smithy4s.codegen.BuildInfo.version,
+      "com.disneystreaming.smithy4s" %% "smithy4s-http4s-swagger"         % smithy4s.codegen.BuildInfo.version,
+      "org.http4s"                   %% "http4s-ember-server"             % "0.23.27",
+      "org.tpolecat"                 %% "skunk-core"                      % "0.6.4",
+      "com.dimafeng"                 %% "testcontainers-scala-postgresql" % "0.41.4" % Test,
     ),
     fork := true,
   )

@@ -15,7 +15,8 @@ import java.time.ZoneOffset
 trait SnippetRepository {
   def createTable(): IO[Unit]
   def insert(snippets: List[Snippet]): IO[Unit]
-  def getAll(before: Option[Slug], page: Option[Page]): IO[List[Snippet]]
+  def getAll(offset: Long, limit: Int): IO[List[Snippet]]
+  def countAll(): IO[Long]
   def get(id: Slug): IO[Option[Snippet]]
 }
 
@@ -26,6 +27,7 @@ object SnippetRepository {
 
     object codecs {
       import skunk.codec.all.*
+      export skunk.codec.all.int8
       import skunk.smithy4s.codec.all.*
 
       given [From, To](using b: Bijection[From, To]): Iso[From, To] = Iso.instance(b.to)(b.from)
@@ -51,17 +53,17 @@ object SnippetRepository {
       private val allFields = sql"""id, description, code, author, created_at"""
 
       def createTable(): IO[Unit] =
-        getSession.use {
-          _.execute(
-            sql"""create table if not exists snippets (
-            id text primary key,
-            description text not null,
-            code text not null,
-            author jsonb not null,
-            created_at timestamptz not null
-          )""".command
-              // todo: create an index for ordered querying by date?
-          )
+        getSession.use { pool =>
+          pool.execute(sql"""create table if not exists snippets (
+              id text primary key,
+              description text not null,
+              code text not null,
+              author jsonb not null,
+              created_at timestamptz not null
+            )""".command) *>
+            pool.execute(
+              sql"create index if not exists snipets_created_at on snippets(created_at)".command
+            )
         }.void
 
       def insert(snippets: List[Snippet]): IO[Unit] =
@@ -72,11 +74,19 @@ object SnippetRepository {
             .flatMap(_.execute(snippets))
         }.void
 
-      def getAll(before: Option[Slug], page: Option[Page]): IO[List[Snippet]] =
-        if (before.nonEmpty || page.nonEmpty) IO.stub
-        else
-          getSession
-            .use(_.execute(sql"""select $allFields from snippets order by created_at asc""".query(codecs.snippet)))
+      def getAll(offset: Long, limit: Int): IO[List[Snippet]] =
+        getSession
+          .use(
+            _.execute(
+              sql"""select $allFields from snippets order by created_at asc offset ${codecs.int8} limit ${codecs.int8}"""
+                .query(
+                  codecs.snippet
+                )
+            )((offset, limit))
+          )
+
+      def countAll(): IO[Long] =
+        getSession.use(_.unique(sql"""select count(*) from snippets""".query(codecs.int8)))
 
       def get(id: Slug): IO[Option[Snippet]] =
         getSession.use { ses =>

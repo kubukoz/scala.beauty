@@ -17,18 +17,25 @@ service ScalaBeautyApi {
 @readonly
 operation GetSnippets {
     input := {
-        @httpQuery("before")
-        before: Slug
-
         @httpQuery("page")
         page: Page
     }
 
     output := {
-        @httpPayload
         @required
         snippets: Snippets
+
+        @required
+        pagination: Pagination
     }
+}
+
+structure Pagination {
+    @required
+    currentPage: Page
+
+    @required
+    totalPages: Page
 }
 
 @http(method: "GET", uri: "/snippets/{id}")
@@ -89,4 +96,4 @@ structure GithubAuthor {
 string Slug
 
 @range(min: 0)
-integer Page
+long Page

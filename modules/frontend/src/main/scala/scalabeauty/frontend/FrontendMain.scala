@@ -83,7 +83,7 @@ object FrontendMain extends TyrianIOApp[Msg, Model] {
       Model(Page.Home(Nil)),
       Cmd.emit(Msg.SetTitle("Scala.beauty"))
         |+| Cmd
-          .Run(ScalaBeautyApi[IO].getSnippets(None, None))
+          .Run(ScalaBeautyApi[IO].getSnippets(None))
           .map(out => Msg.GotSnippets(out.snippets)),
     )
 

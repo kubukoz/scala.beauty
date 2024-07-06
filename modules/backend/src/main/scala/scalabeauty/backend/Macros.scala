@@ -35,6 +35,7 @@ object Macros {
 
   private def typeReprsToTuple(using Quotes)(types: List[quotes.reflect.TypeRepr]): quotes.reflect.TypeRepr = {
     import quotes.reflect.*
+    // todo: the order here might be the wrong way around
     types.foldLeft(TypeRepr.of[EmptyTuple]) { (rest, item) =>
       TypeRepr.of[*:].appliedTo(List(item, rest))
     }
