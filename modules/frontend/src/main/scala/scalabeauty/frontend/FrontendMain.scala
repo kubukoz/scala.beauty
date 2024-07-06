@@ -18,15 +18,13 @@ import scala.scalajs.js.annotation.JSExportTopLevel
 import HtmlUtils.*
 
 enum Msg {
-  // todo rename
-  case GotSnippets(data: List[RichSnippet], pagination: api.Pagination)
+  case PageFetched(data: List[RichSnippet], pagination: api.Pagination)
   case NavigateTo(url: String)
   case NewTab(url: String)
   case OpenSnippet(id: Slug)
   case GoHome(page: Option[api.Page])
   case GoHomeResetState
-  // todo rename
-  case OpenedSnippet(snippet: RichSnippet)
+  case SnippetFetched(snippet: RichSnippet)
   case NoOp
   case SetTitle(title: String)
   case UpdatePlaceholder(hash: Slug)
@@ -118,7 +116,7 @@ object FrontendMain extends TyrianIOApp[Msg, Model] {
               .flatMap { output =>
                 output.snippets
                   .traverse(attachCode)
-                  .map(Msg.GotSnippets(_, output.pagination))
+                  .map(Msg.PageFetched(_, output.pagination))
               }
           ),
     )
@@ -183,7 +181,7 @@ object FrontendMain extends TyrianIOApp[Msg, Model] {
   }
 
   def update(model: Model): Msg => (Model, Cmd[IO, Msg]) = {
-    case Msg.GotSnippets(data, pagination) =>
+    case Msg.PageFetched(data, pagination) =>
       // important: this message is only relevant at home
       (model.mapPage(_.mapHome(_.copy(data = data, pagination = Some(pagination)))), Cmd.None)
 
@@ -193,10 +191,10 @@ object FrontendMain extends TyrianIOApp[Msg, Model] {
         Cmd.emit(Msg.SetTitle("Scala.beauty - loading snippet " + id.hashed))
           |+| Cmd
             .Run(ScalaBeautyApi[IO].getSnippet(id).map(_.snippet).flatMap(attachCode))
-            .map(Msg.OpenedSnippet(_)),
+            .map(Msg.SnippetFetched(_)),
       )
 
-    case Msg.OpenedSnippet(snippet) =>
+    case Msg.SnippetFetched(snippet) =>
       // important: this message is only relevant at snippet.
       // this is still broken if you jump between home and snippet many times fast: the older snippet may load
       // we could fix this if the state contained some requestId of some sort and it matched what we got here...
