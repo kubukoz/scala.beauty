@@ -131,7 +131,7 @@ object FrontendMain extends TyrianIOApp[Msg, Model] {
         text("Latest Scala beauties:")
       ),
       button(className := "button block")(
-        a(href := "https://github.com/kubukoz/scala.beauty/issues/new/choose", target := "_blank")(
+        a(linkAttrs("https://github.com/kubukoz/scala.beauty/issues/new/choose"))(
           "Add yours"
         )
       ),
