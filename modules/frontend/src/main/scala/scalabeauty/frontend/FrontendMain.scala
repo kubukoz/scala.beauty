@@ -9,6 +9,7 @@ import scalabeauty.api
 import scalabeauty.api.*
 import scalabeauty.api.Author.GithubCase
 import smithy4s.http4s.SimpleRestJsonBuilder
+import smithy4s.Timestamp
 import tyrian.*
 import tyrian.Html.*
 
@@ -111,9 +112,13 @@ object FrontendMain extends TyrianIOApp[Msg, Model] {
     viewGeneric(
       header(text("Scala.beauty")),
       subtitle(
-        text("Today's top snippets:")
+        text("Latest Scala beauties:")
       ),
-      button(className := "button block")("Add yours"),
+      button(className := "button block")(
+        a(href := "https://github.com/kubukoz/scala.beauty/issues/new/choose", target := "_blank")(
+          "Add yours"
+        )
+      ),
       if (data.isEmpty) div(className := "block")(text("Loading..."))
       else
         div(
@@ -133,10 +138,16 @@ object FrontendMain extends TyrianIOApp[Msg, Model] {
 
   private def viewSnippetBox(snippet: Snippet) =
     div(className := "box")(
-      div(className := "block")(
-        viewSlug(snippet.id),
-        text(" by "),
-        viewAuthor(snippet.author),
+      div(className := "block is-flex is-justify-content-space-between")(
+        div(
+          viewSlug(snippet.id),
+          text(" by "),
+          viewAuthor(snippet.author),
+        ),
+        div(
+          text("on "),
+          viewDate(snippet.createdAt),
+        ),
       ),
       p(className := "block")(i(snippet.description)),
       div(className := "block")(pre(code(snippet.code))),
@@ -196,6 +207,19 @@ object FrontendMain extends TyrianIOApp[Msg, Model] {
     )
 
   def viewSlug(slug: Slug) = span(className := "has-text-grey is-family-monospace")(slug.hashed)
+
+  def viewDate(date: Timestamp) =
+    span(className := "has-text-grey is-family-monospace") {
+      val jsDate = date.toDate
+
+      // e.g. 2024-07-06
+      "%04d-%02d-%02d".format(
+        jsDate.getUTCFullYear(),
+        jsDate.getUTCMonth() + 1,
+        jsDate.getUTCDate(),
+      )
+    }
+
   extension (s: Slug) {
     def hashed: String          = "#" + s.value
     def nonEmpty: Boolean       = s.value.nonEmpty
@@ -237,6 +261,10 @@ object FrontendMain extends TyrianIOApp[Msg, Model] {
     subtitle(
       text(" by "),
       viewAuthor(snippet.author),
+    ),
+    div(className := "subtitle is-6")(
+      text("on "),
+      viewDate(snippet.createdAt),
     ),
     p(className := "block")(i(snippet.description)),
     div(className := "block")(pre(snippet.code)),
