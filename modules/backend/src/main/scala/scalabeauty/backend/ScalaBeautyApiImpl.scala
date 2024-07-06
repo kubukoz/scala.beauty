@@ -5,12 +5,10 @@ import cats.syntax.all.*
 import scalabeauty.api.*
 
 object ScalaBeautyApiImpl {
-  def instance(repo: SnippetRepository): ScalaBeautyApi[IO] =
+  def instance(repo: SnippetRepository, pageSize: Int): ScalaBeautyApi[IO] =
     new ScalaBeautyApi[IO] {
 
-      def getSnippets(page: Option[Page]): IO[GetSnippetsOutput] = {
-        val pageSize = 100
-
+      def getSnippets(page: Option[Page]): IO[GetSnippetsOutput] =
         (
           repo.getAll(offset = page.getOrElse(Page(0)).value, limit = pageSize),
           repo.countAll().map(calcPageCount(pageSize, _)),
@@ -23,7 +21,6 @@ object ScalaBeautyApiImpl {
             ),
           )
         }
-      }
 
       private def calcPageCount(pageSize: Long, itemCount: Long): Long =
         (itemCount.toDouble / pageSize).ceil.toLong

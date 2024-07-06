@@ -83,7 +83,7 @@ object SnippetRepository {
         getSession
           .use(
             _.execute(
-              sql"""select $allFields from snippets order by created_at asc offset ${codecs.int8} limit ${codecs.int8}"""
+              sql"""select $allFields from snippets order by created_at desc offset ${codecs.int8} limit ${codecs.int8}"""
                 .query(
                   codecs.snippet
                 )
@@ -115,7 +115,14 @@ object SnippetRepository {
         }
       }
 
-      def getAll(offset: Long, limit: Int): IO[List[Snippet]] = ref.get.map(_.values.toList)
+      def getAll(offset: Long, limit: Int): IO[List[Snippet]] =
+        ref.get.map(
+          _.values.toList
+            .sortBy(_.createdAt.toInstant)
+            .reverse
+            .drop(offset.toInt)
+            .take(limit)
+        )
 
       def countAll(): IO[Long] = ref.get.map(_.size.toLong)
 

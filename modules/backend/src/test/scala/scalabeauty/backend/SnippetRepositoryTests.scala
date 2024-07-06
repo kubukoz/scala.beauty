@@ -30,6 +30,12 @@ trait SnippetRepositoryTests extends weaver.SimpleIOSuite {
       .as(success)
   }
 
+  test("query without write") {
+    withRepository.use { repo =>
+      repo.get(Slug("nonexistent")).map(assert.same(none[Snippet], _))
+    }
+  }
+
   test("insert + query") {
     withRepository.use { repo =>
       val input = sampleSnippet(0)
@@ -61,14 +67,23 @@ trait SnippetRepositoryTests extends weaver.SimpleIOSuite {
     }
   }
 
-  test("insert + list") {
+  test("insert + list (ordered by creation date, from newest to oldest)") {
     withRepository.use { repo =>
-      val inputs = List(sampleSnippet(0), sampleSnippet(1))
+      val inputs = List(
+        sampleSnippet(1).copy(createdAt = Timestamp.fromEpochSecond(1)),
+        sampleSnippet(2).copy(createdAt = Timestamp.fromEpochSecond(2)),
+        sampleSnippet(0).copy(createdAt = Timestamp.fromEpochSecond(0)),
+      )
 
       repo.insert(inputs) *>
         repo
           .getAll(offset = 0L, limit = 10)
-          .map(result => assert(result.sameElements(inputs)))
+          .map(result =>
+            assert.same(
+              inputs.sortBy(_.createdAt.toInstant).reverse,
+              result,
+            )
+          )
     }
   }
 
