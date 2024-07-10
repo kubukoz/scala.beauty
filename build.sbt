@@ -46,6 +46,13 @@ val frontend = module
   )
   .dependsOn(shared.js(scala3))
 
+val typoModels = module
+  .settings(
+    libraryDependencies ++= Seq(
+      "com.olvind.typo" %% "typo-dsl-doobie" % "0.22.2"
+    )
+  )
+
 val backend = module
   .enablePlugins(JavaAppPackaging, DockerPlugin)
   .settings(
@@ -55,10 +62,19 @@ val backend = module
       "org.http4s"                   %% "http4s-ember-server"             % "0.23.27",
       "org.tpolecat"                 %% "skunk-core"                      % "0.6.4",
       "com.dimafeng"                 %% "testcontainers-scala-postgresql" % "0.41.4" % Test,
+      "com.olvind.typo"              %% "typo-dsl-doobie"                 % "0.22.2",
     ),
     fork := true,
   )
-  .dependsOn(shared.jvm(autoScalaLibrary = true))
+  .dependsOn(shared.jvm(autoScalaLibrary = true), typoModels)
+
+val typo = module
+  .settings(
+    libraryDependencies ++= Seq(
+      "com.olvind.typo" %% "typo" % "0.22.2"
+    ),
+    fork := true,
+  )
 
 val root = project
   .in(file("."))
