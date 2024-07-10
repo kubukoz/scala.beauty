@@ -2,13 +2,10 @@ package scalabeauty.frontend
 
 import cats.effect.IO
 import cats.syntax.all.*
-import org.http4s.client.Client
-import org.http4s.dom.FetchClientBuilder
-import org.http4s.implicits.*
 import scalabeauty.api
 import scalabeauty.api.{Pagination as _, *}
-import smithy4s.http4s.SimpleRestJsonBuilder
 import smithy4s.Timestamp
+import smithy4s_fetch.SimpleRestJsonFetchClient
 import tyrian.*
 import tyrian.Html.*
 
@@ -84,19 +81,9 @@ enum Page {
 object FrontendMain extends TyrianIOApp[Msg, Model] {
 
   given ScalaBeautyApi[IO] =
-    SimpleRestJsonBuilder(ScalaBeautyApi)
-      .client(resetBaseUri(FetchClientBuilder[IO].create))
-      .uri(uri"/api")
-      .make
-      .toTry
-      .get
-
-  // https://github.com/disneystreaming/smithy4s/issues/1245
-  private def resetBaseUri(c: Client[IO]): Client[IO] = Client[IO] { req =>
-    val amendedUri     = req.uri.copy(scheme = None, authority = None)
-    val amendedRequest = req.withUri(amendedUri)
-    c.run(amendedRequest)
-  }
+    SmithyUtils.suspendPromise(
+      SimpleRestJsonFetchClient(ScalaBeautyApi, org.scalajs.dom.window.location.toString() + "api").make
+    )
 
   def init(flags: Map[String, String]): (Model, Cmd[IO, Msg]) = initialize(page = None)
 
@@ -274,7 +261,6 @@ object FrontendMain extends TyrianIOApp[Msg, Model] {
         case s"/snippet/${id}"  => Msg.OpenSnippet(Slug(id))
         case s"/snippet/${id}/" => Msg.OpenSnippet(Slug(id))
         case "/" | "" =>
-          println("search: " + loc.search)
           Msg.GoHome {
             loc.search
               .collectFirst { case s"?page=$page" =>
