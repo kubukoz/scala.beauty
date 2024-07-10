@@ -263,7 +263,6 @@ object FrontendMain extends TyrianIOApp[Msg, Model] {
         case s"/snippet/${id}"  => Msg.OpenSnippet(Slug(id))
         case s"/snippet/${id}/" => Msg.OpenSnippet(Slug(id))
         case "/" | "" =>
-          println("search: " + loc.search)
           Msg.GoHome {
             loc.search
               .collectFirst { case s"?page=$page" =>
