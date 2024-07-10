@@ -61,7 +61,6 @@ val backend = module
       "org.http4s"                   %% "http4s-ember-server"             % "0.23.27",
       "org.tpolecat"                 %% "skunk-core"                      % "0.6.4",
       "com.dimafeng"                 %% "testcontainers-scala-postgresql" % "0.41.4" % Test,
-      "com.olvind.typo"              %% "typo-dsl-doobie"                 % "0.22.2",
     ),
     fork := true,
   )
