@@ -11,7 +11,6 @@ import tyrian.Html.*
 
 import scala.annotation.nowarn
 import scala.scalajs.js.annotation.JSExportTopLevel
-import scala.scalajs.js.Promise
 
 import HtmlUtils.*
 
@@ -82,10 +81,9 @@ enum Page {
 object FrontendMain extends TyrianIOApp[Msg, Model] {
 
   given ScalaBeautyApi[IO] =
-    SimpleRestJsonFetchClient(ScalaBeautyApi, org.scalajs.dom.window.location.toString() + "api").make
-      .transform(new smithy4s.kinds.PolyFunction[Promise, IO] {
-        def apply[A0](fa: Promise[A0]): IO[A0] = IO.fromPromise(IO.pure(fa))
-      })
+    SmithyUtils.suspendPromise(
+      SimpleRestJsonFetchClient(ScalaBeautyApi, org.scalajs.dom.window.location.toString() + "api").make
+    )
 
   def init(flags: Map[String, String]): (Model, Cmd[IO, Msg]) = initialize(page = None)
 
