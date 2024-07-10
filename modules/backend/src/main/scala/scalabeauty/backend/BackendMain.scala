@@ -32,7 +32,7 @@ object BackendMain extends IOApp.Simple {
 
       _ <- initStates(repo).toResource
 
-      service = ScalaBeautyApiImpl.instance(repo)
+      service = ScalaBeautyApiImpl.instance(repo, pageSize = 5)
 
       route <- SimpleRestJsonBuilder.routes(service).resource
 

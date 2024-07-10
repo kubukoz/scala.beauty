@@ -3,8 +3,8 @@ package scalabeauty.frontend
 import cats.effect.IO
 import cats.syntax.all.*
 import scalabeauty.api
-import scalabeauty.api.*
-import scalabeauty.api.Author.GithubCase
+import scalabeauty.api.{Pagination as _, *}
+import smithy4s.Timestamp
 import smithy4s_fetch.SimpleRestJsonFetchClient
 import tyrian.*
 import tyrian.Html.*
@@ -13,16 +13,16 @@ import scala.annotation.nowarn
 import scala.scalajs.js.annotation.JSExportTopLevel
 import scala.scalajs.js.Promise
 
+import HtmlUtils.*
+
 enum Msg {
-  // todo rename
-  case GotSnippets(data: List[Snippet])
+  case PageFetched(data: List[RichSnippet], pagination: api.Pagination)
   case NavigateTo(url: String)
   case NewTab(url: String)
   case OpenSnippet(id: Slug)
-  case GoHome
+  case GoHome(page: Option[api.Page])
   case GoHomeResetState
-  // todo rename
-  case OpenedSnippet(snippet: Snippet)
+  case SnippetFetched(snippet: RichSnippet)
   case NoOp
   case SetTitle(title: String)
   case UpdatePlaceholder(hash: Slug)
@@ -35,15 +35,36 @@ case class Model(page: Page) {
 
 enum SnippetState {
   case Fetching
-  case Fetched(snippet: Snippet, maskSize: Int)
+  case Fetched(snippet: RichSnippet, maskSize: Int)
 
   def mapFetched(f: SnippetState.Fetched => SnippetState.Fetched): SnippetState = this match {
     case fe: SnippetState.Fetched => f(fe)
     case s                        => s
   }
 }
+
+case class RichSnippet(
+    id: Slug,
+    description: String,
+    code: String,
+    author: Author,
+    createdAt: Timestamp,
+    codeHtml: String,
+)
+
+object RichSnippet {
+  def fromApi(base: api.Snippet, codeHtml: String): RichSnippet = RichSnippet(
+    base.id,
+    base.description,
+    base.code,
+    base.author,
+    base.createdAt,
+    codeHtml,
+  )
+}
+
 enum Page {
-  case Home(data: List[api.Snippet])
+  case Home(data: List[RichSnippet], pagination: Option[api.Pagination])
   case Snippet(state: SnippetState, placeholderSlug: Slug)
 
   def mapHome(f: Page.Home => Page.Home): Page = this match {
@@ -66,23 +87,36 @@ object FrontendMain extends TyrianIOApp[Msg, Model] {
         def apply[A0](fa: Promise[A0]): IO[A0] = IO.fromPromise(IO.pure(fa))
       })
 
-  def init(flags: Map[String, String]): (Model, Cmd[IO, Msg]) = initialize
+  def init(flags: Map[String, String]): (Model, Cmd[IO, Msg]) = initialize(page = None)
 
-  private def initialize: (Model, Cmd[IO, Msg]) =
+  private def attachCode(snippet: Snippet): IO[RichSnippet] =
+    Shiki
+      .codeToHtml(snippet.code, "scala", "catppuccin-macchiato")
+      .map(RichSnippet.fromApi(snippet, _))
+
+  private def initialize(page: Option[api.Page]): (Model, Cmd[IO, Msg]) =
     (
-      Model(Page.Home(Nil)),
+      Model(Page.Home(Nil, None)),
       Cmd.emit(Msg.SetTitle("Scala.beauty"))
         |+| Cmd
-          .Run(ScalaBeautyApi[IO].getSnippets(None, None))
-          .map(out => Msg.GotSnippets(out.snippets)),
+          .Run(
+            ScalaBeautyApi[IO]
+              .getSnippets(page)
+              .flatMap { output =>
+                output.snippets
+                  .traverse(attachCode)
+                  .map(Msg.PageFetched(_, output.pagination))
+              }
+          ),
     )
 
   def view(model: Model): Html[Msg] =
     model.page.match {
-      case Page.Home(data)                                  => viewHome(data)
-      case Page.Snippet(SnippetState.Fetching, placeholder) => viewSnippetPlaceholder(placeholder)
+      case Page.Home(data, pagination) => viewHome(data, pagination)
+      case Page.Snippet(SnippetState.Fetching, placeholder) =>
+        viewGeneric(SnippetComponent.viewPlaceholder(placeholder))
       case Page.Snippet(SnippetState.Fetched(snip, maskSize), placeholder) =>
-        viewSnippet(snip.copy(id = snip.id.mask(placeholder.takeRight(maskSize))))
+        viewGeneric(SnippetComponent.view(snip.copy(id = snip.id.mask(placeholder.takeRight(maskSize))))*)
     }
 
   private def viewGeneric(content: Elem[Msg]*) =
@@ -94,16 +128,20 @@ object FrontendMain extends TyrianIOApp[Msg, Model] {
           className := "container"
         )(content.toList)
       ),
-      viewFooter,
+      Footer.view,
     )
 
-  private def viewHome(data: List[Snippet]) =
+  private def viewHome(data: List[RichSnippet], pagination: Option[api.Pagination]) =
     viewGeneric(
-      header(text("Scala.beauty")),
+      heading(text("Scala.beauty")),
       subtitle(
-        text("Today's top snippets:")
+        text("Latest Scala beauties:")
       ),
-      button(className := "button block")("Add yours"),
+      button(className := "button block")(
+        a(linkAttrs("https://github.com/kubukoz/scala.beauty/issues/new/choose"))(
+          "Add yours"
+        )
+      ),
       if (data.isEmpty) div(className := "block")(text("Loading..."))
       else
         div(
@@ -111,134 +149,18 @@ object FrontendMain extends TyrianIOApp[Msg, Model] {
             data.map { snippet =>
               li(className := "block")(
                 a(href := "/snippet/" + snippet.id)(
-                  viewSnippetBox(snippet)
+                  SnippetComponent.viewBox(snippet)
                 )
               )
 
             }
-          ),
-          viewPagination,
+          ) ::
+            pagination
+              .map(Pagination.getPaginationBlocks(_))
+              .map(Pagination.view)
+              .toList
         ),
     )
-
-  private def viewSnippetBox(snippet: Snippet) =
-    div(className := "box")(
-      div(className := "block")(
-        viewSlug(snippet.id),
-        text(" by "),
-        viewAuthor(snippet.author),
-      ),
-      p(className := "block")(i(snippet.description)),
-      div(className := "block")(pre(code(snippet.code))),
-    )
-
-  private def viewPagination =
-    nav(
-      className := "pagination block is-centered",
-      role      := "navigation",
-    )(
-      ul(className := "pagination-list")(
-        li(
-          a(className := "pagination-link")("1")
-        ),
-        li(
-          span(className := "pagination-ellipsis")("…")
-        ),
-        li(
-          a(className := "pagination-link")("45")
-        ),
-        li(
-          a(
-            className := "pagination-link is-current"
-          )("46")
-        ),
-        li(
-          a(className := "pagination-link")("47")
-        ),
-        li(
-          span(className := "pagination-ellipsis")("…")
-        ),
-        li(
-          a(className := "pagination-link")("86")
-        ),
-      )
-    )
-
-  private def viewFooter =
-    footer(
-      className := "footer is-flex-align-items-flex-end mt-auto"
-    )(
-      div(className := "content has-text-centered")(
-        text("Built with "),
-        a(linkAttrs("https://scala-lang.org"))("Scala"),
-        text(", "),
-        a(linkAttrs("https://www.scala-js.org"))("Scala.js"),
-        text(", "),
-        a(linkAttrs("https://tyrian.indigoengine.io"))("Tyrian"),
-        text(", "),
-        a(linkAttrs("https://disneystreaming.github.io/smithy4s"))("Smithy4s"),
-        text(", "),
-        a(linkAttrs("https://bulma.io"))("Bulma"),
-        text(" and "),
-        a(linkAttrs("https://http4s.org"))("http4s"),
-        text("."),
-      )
-    )
-
-  def viewSlug(slug: Slug) = span(className := "has-text-grey is-family-monospace")(slug.hashed)
-  extension (s: Slug) {
-    def hashed: String          = "#" + s.value
-    def nonEmpty: Boolean       = s.value.nonEmpty
-    def takeRight(n: Int): Slug = Slug(s.value.takeRight(n))
-    def mask(another: Slug): Slug = {
-      val n = another.value.length
-      Slug(s.value.dropRight(n) + another.value)
-    }
-  }
-
-  private def header(items: Elem[Msg]*) =
-    h1(
-      className := "title"
-    )(items.toList)
-
-  private def subtitle(items: Elem[Msg]*) =
-    p(
-      className := "subtitle"
-    )(items.toList)
-
-  private def linkAttrs(url: String) = List(
-    href := url,
-    onClick(Msg.NewTab(url)),
-  )
-
-  private def viewAuthor(author: Author) = author.match { case GithubCase(github) =>
-    val url = show"https://github.com/${github.username}"
-    a(linkAttrs(url))(
-      show"@${github.username}"
-    )
-  }
-
-  private def viewSnippet(snippet: Snippet) = viewGeneric(
-    header(
-      text("Scala."),
-      viewSlug(snippet.id),
-      text(".beauty"),
-    ),
-    subtitle(
-      text(" by "),
-      viewAuthor(snippet.author),
-    ),
-    p(className := "block")(i(snippet.description)),
-    div(className := "block")(pre(snippet.code)),
-  )
-
-  private def viewSnippetPlaceholder(slug: Slug) = viewGeneric(
-    header(
-      text("Scala."),
-      viewSlug(slug),
-      text(".beauty"),
-    )
-  )
 
   @nowarn("msg=unused")
   private def logged[A, B](f: A => B): A => B = a => {
@@ -248,20 +170,20 @@ object FrontendMain extends TyrianIOApp[Msg, Model] {
   }
 
   def update(model: Model): Msg => (Model, Cmd[IO, Msg]) = {
-    case Msg.GotSnippets(data) =>
+    case Msg.PageFetched(data, pagination) =>
       // important: this message is only relevant at home
-      (model.mapPage(_.mapHome(_.copy(data = data))), Cmd.None)
+      (model.mapPage(_.mapHome(_.copy(data = data, pagination = Some(pagination)))), Cmd.None)
 
     case Msg.OpenSnippet(id) =>
       (
         model.copy(page = Page.Snippet(SnippetState.Fetching, placeholderSlug = mkSlug(10))),
         Cmd.emit(Msg.SetTitle("Scala.beauty - loading snippet " + id.hashed))
           |+| Cmd
-            .Run(ScalaBeautyApi[IO].getSnippet(id))
-            .map(output => Msg.OpenedSnippet(output.snippet)),
+            .Run(ScalaBeautyApi[IO].getSnippet(id).map(_.snippet).flatMap(attachCode))
+            .map(Msg.SnippetFetched(_)),
       )
 
-    case Msg.OpenedSnippet(snippet) =>
+    case Msg.SnippetFetched(snippet) =>
       // important: this message is only relevant at snippet.
       // this is still broken if you jump between home and snippet many times fast: the older snippet may load
       // we could fix this if the state contained some requestId of some sort and it matched what we got here...
@@ -289,8 +211,8 @@ object FrontendMain extends TyrianIOApp[Msg, Model] {
     // For some (probably reasonable) reason, this gets hit twice when you go directly to home.
     // TODO: check if the model is already fetching the data?
     // (or move the IO calls to subscriptions, which should hopefully do just that)
-    case Msg.GoHome           => initialize
-    case Msg.GoHomeResetState => initialize.fmap(_ |+| Nav.pushUrl("/"))
+    case Msg.GoHome(page)     => initialize(page)
+    case Msg.GoHomeResetState => initialize(None).fmap(_ |+| Nav.pushUrl("/"))
     case Msg.SetTitle(title) =>
       (
         model,
@@ -319,7 +241,7 @@ object FrontendMain extends TyrianIOApp[Msg, Model] {
             case SnippetState.Fetching         => Masked.Model.Pending
             case SnippetState.Fetched(_, size) => Masked.Model.Fetched(size)
           }.some
-        case Page.Home(data) => none
+        case Page.Home(_, _) => none
       }
       .foldMap(
         Masked.subscriptions(_)(
@@ -340,8 +262,27 @@ object FrontendMain extends TyrianIOApp[Msg, Model] {
       loc.pathName.match {
         case s"/snippet/${id}"  => Msg.OpenSnippet(Slug(id))
         case s"/snippet/${id}/" => Msg.OpenSnippet(Slug(id))
-        case "/" | ""           => Msg.GoHome
-        case _                  => Msg.GoHomeResetState
+        case "/" | "" =>
+          println("search: " + loc.search)
+          Msg.GoHome {
+            loc.search
+              .collectFirst { case s"?page=$page" =>
+                page.toIntOption
+              }
+              .flatten
+              .map(api.Page(_))
+          }
+        case _ => Msg.GoHomeResetState
       }
+  }
+}
+
+extension (s: Slug) {
+  def hashed: String          = "#" + s.value
+  def nonEmpty: Boolean       = s.value.nonEmpty
+  def takeRight(n: Int): Slug = Slug(s.value.takeRight(n))
+  def mask(another: Slug): Slug = {
+    val n = another.value.length
+    Slug(s.value.dropRight(n) + another.value)
   }
 }

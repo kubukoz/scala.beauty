@@ -15,6 +15,7 @@
       {
         devShell = pkgs.mkShell {
           buildInputs = [
+            pkgs.nodejs
             pkgs.yarn
             pkgs.sbt
           ];
