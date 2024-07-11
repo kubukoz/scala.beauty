@@ -35,6 +35,7 @@ import besom.api.heroku.build.BuildArgs
         path = "build"
       ),
     ),
+    opts(dependsOn = postgresAddon),
   )
 
   Stack(postgresAddon, build).exports(
