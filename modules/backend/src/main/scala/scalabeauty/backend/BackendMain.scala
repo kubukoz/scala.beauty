@@ -63,7 +63,6 @@ object BackendMain extends IOApp.Simple {
         .build
       _ <- IO.println(show"Server running at ${server.baseUri}").toResource
       _ <- IO.println(show"SwaggerUI running at ${server.baseUri / "docs"}").toResource
-      _ <- IO.println("things should work by now...").toResource
     } yield ()
   }.useForever
 
