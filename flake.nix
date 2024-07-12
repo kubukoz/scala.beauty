@@ -1,6 +1,6 @@
 {
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs";
+    nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-unstable";
     flake-utils.url = "github:numtide/flake-utils";
   };
 
@@ -18,6 +18,7 @@
             pkgs.nodejs
             pkgs.yarn
             pkgs.sbt
+            pkgs.flyctl
           ];
         };
       }
