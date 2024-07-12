@@ -82,7 +82,9 @@ object FrontendMain extends TyrianIOApp[Msg, Model] {
 
   given ScalaBeautyApi[IO] =
     SmithyUtils.suspendPromise(
-      SimpleRestJsonFetchClient(ScalaBeautyApi, org.scalajs.dom.window.location.toString() + "api").make
+      // todo: figure out how to avoid the prefix, perhaps?
+      SimpleRestJsonFetchClient(ScalaBeautyApi, org.scalajs.dom.window.location.toString()).make
+        // SimpleRestJsonFetchClient(ScalaBeautyApi, org.scalajs.dom.window.location.toString() + "api").make
     )
 
   def init(flags: Map[String, String]): (Model, Cmd[IO, Msg]) = initialize(page = None)

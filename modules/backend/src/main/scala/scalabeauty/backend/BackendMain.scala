@@ -7,6 +7,8 @@ import cats.syntax.all.*
 import com.comcast.ip4s.*
 import natchez.Trace
 import org.http4s.ember.server.EmberServerBuilder
+import org.http4s.HttpRoutes
+import org.http4s.StaticFile
 import scalabeauty.api.*
 import skunk.SSL
 import skunk.Session
@@ -44,6 +46,7 @@ object BackendMain extends IOApp.Simple {
 
       httpApp = (
         route <+>
+          staticRoutes <+>
           smithy4s.http4s.swagger.docs[IO](ScalaBeautyApi)
       ).orNotFound
 
@@ -60,8 +63,23 @@ object BackendMain extends IOApp.Simple {
         .build
       _ <- IO.println(show"Server running at ${server.baseUri}").toResource
       _ <- IO.println(show"SwaggerUI running at ${server.baseUri / "docs"}").toResource
+      _ <- IO.println("things should work by now...").toResource
     } yield ()
   }.useForever
+
+  import org.http4s.dsl.io.*
+
+  private def staticRoutes = HttpRoutes.of[IO] {
+    case req @ GET -> ((Root / "index.html") | Root) =>
+      StaticFile
+        .fromResource("frontend/index.html", Some(req))
+        .getOrElseF(InternalServerError())
+
+    case req @ GET -> path if path.startsWith(Root / "assets") =>
+      StaticFile
+        .fromResource("frontend/" + path.renderString, Some(req))
+        .getOrElseF(InternalServerError())
+  }
 
   private def mkSlug(len: Int) = Slug(Random.alphanumeric.take(len).mkString.toLowerCase())
 

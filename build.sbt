@@ -36,6 +36,8 @@ val shared =
       )
     )
 
+val yarnBuild = taskKey[File]("Build the web app. Returns the dist directory")
+
 val frontend = module
   .enablePlugins(ScalaJSPlugin)
   .settings(
@@ -44,6 +46,19 @@ val frontend = module
       "tech.neander"    %%% "smithy4s-fetch" % "0.0.4",
     ),
     scalaJSLinkerConfig ~= { _.withModuleKind(ModuleKind.ESModule) },
+    yarnBuild := {
+      import sys.process._
+      Process(
+        List(
+          "yarn",
+          "--cwd",
+          baseDirectory.value.toString,
+          "build",
+        )
+      ).!
+
+      baseDirectory.value / "dist"
+    },
   )
   .dependsOn(shared.js(scala3))
 
@@ -60,10 +75,9 @@ val backend = module
       "is.cir"                       %% "ciris"                           % "3.6.0",
       "com.dimafeng"                 %% "testcontainers-scala-postgresql" % "0.41.4" % Test,
     ),
-    fork                 := true,
-    dockerUpdateLatest   := true,
-    Docker / packageName := "scala-beauty",
-    isHeroku             := false,
+    fork               := true,
+    dockerUpdateLatest := true,
+    isHeroku           := false,
     dockerBuildOptions ++= { if (isHeroku.value) Seq("--platform", "linux/amd64") else Nil },
     dockerAlias := (
       if (isHeroku.value)
@@ -82,6 +96,19 @@ val backend = module
         )
     ),
     dockerBaseImage := "openjdk:11-jre",
+
+    // include frontend
+    Compile / resourceGenerators += Def.task {
+      import sys.process._
+
+      val frontendDir = (frontend / yarnBuild).value
+      val targetDir   = (Compile / resourceManaged).value / "frontend"
+
+      IO.delete(targetDir)
+      IO.copyDirectory(frontendDir, targetDir)
+
+      Path.allSubpaths(targetDir).map(_._1).toList
+    },
   )
   .dependsOn(shared.jvm(autoScalaLibrary = true))
 
