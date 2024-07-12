@@ -18,6 +18,7 @@
             pkgs.nodejs
             pkgs.yarn
             pkgs.sbt
+            pkgs.heroku
           ];
         };
       }

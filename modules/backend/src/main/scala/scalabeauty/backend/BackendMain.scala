@@ -4,13 +4,16 @@ import cats.effect.kernel.Resource
 import cats.effect.IO
 import cats.effect.IOApp
 import cats.syntax.all.*
+import com.comcast.ip4s.*
 import natchez.Trace
 import org.http4s.ember.server.EmberServerBuilder
 import scalabeauty.api.*
+import skunk.SSL
 import skunk.Session
 import smithy4s.http4s.SimpleRestJsonBuilder
 import smithy4s.Timestamp
 
+import scala.concurrent.duration.Duration
 import scala.util.Random
 
 object BackendMain extends IOApp.Simple {
@@ -20,13 +23,16 @@ object BackendMain extends IOApp.Simple {
     given Trace[IO] = Trace.Implicits.noop
 
     for {
+      config <- AppConfig.read.load[IO].toResource
+      _      <- IO.println(s"Loaded config: $config").toResource
       sessionPool <- Session.pooled[IO](
-        host = "localhost",
-        port = 5432,
-        user = "postgres",
-        database = "postgres",
-        password = Some("postgres"),
+        host = config.db.host,
+        port = config.db.port,
+        user = config.db.user,
+        database = config.db.database,
+        password = Some(config.db.password.value),
         max = 10,
+        ssl = SSL.Trusted,
       )
       repo = SnippetRepository.instance(sessionPool)
 
@@ -44,10 +50,13 @@ object BackendMain extends IOApp.Simple {
       server <- EmberServerBuilder
         .default[IO]
         .withHttpApp(httpApp)
+        .withHost(host"0.0.0.0")
+        .withPort(config.http.port)
         .withErrorHandler { case e =>
           cats.effect.std.Console[IO].printStackTrace(e) *>
             IO.raiseError(e)
         }
+        .withShutdownTimeout(Duration.Zero)
         .build
       _ <- IO.println(show"Server running at ${server.baseUri}").toResource
       _ <- IO.println(show"SwaggerUI running at ${server.baseUri / "docs"}").toResource
