@@ -13,6 +13,7 @@ val commonSettings = Seq(
     compilerPlugin("org.polyvariant" % "better-tostring" % "0.3.17" cross CrossVersion.full),
     "com.disneystreaming" %%% "weaver-cats" % "0.8.4" % Test,
   ),
+  publish / skip := true,
 )
 
 def module(implicit name: sourcecode.Name) =
@@ -56,7 +57,10 @@ val backend = module
       "org.tpolecat"                 %% "skunk-core"                      % "0.6.4",
       "com.dimafeng"                 %% "testcontainers-scala-postgresql" % "0.41.4" % Test,
     ),
-    fork := true,
+    fork                    := true,
+    Docker / packageName    := "scala-beauty-amd2",
+    Docker / dockerUsername := Some("kubukoz"),
+    dockerBuildOptions ++= Seq("--platform", "linux/amd64"),
   )
   .dependsOn(shared.jvm(autoScalaLibrary = true))
 
@@ -76,3 +80,6 @@ val root = project
   .in(file("."))
   .aggregate(backend, frontend)
   .aggregate(shared.projectRefs: _*)
+  .settings(
+    publish / skip := true
+  )
