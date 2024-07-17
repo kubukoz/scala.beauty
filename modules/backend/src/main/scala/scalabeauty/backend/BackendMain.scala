@@ -8,7 +8,7 @@ import cats.syntax.all.*
 import com.comcast.ip4s.*
 import natchez.Trace
 import org.http4s.ember.server.EmberServerBuilder
-import org.http4s.server.middleware.HttpsRedirect
+import org.http4s.server.middleware.HSTS
 import org.http4s.HttpRoutes
 import org.http4s.StaticFile
 import scalabeauty.api.*
@@ -59,7 +59,7 @@ object BackendMain extends IOApp.Simple {
 
       server <- EmberServerBuilder
         .default[IO]
-        .withHttpApp(HttpsRedirect(httpApp))
+        .withHttpApp(HSTS(httpApp))
         .withHost(host"0.0.0.0")
         .withPort(config.http.port)
         .withErrorHandler { case e =>
