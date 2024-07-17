@@ -8,6 +8,7 @@ import smithy4s.Service
 import scala.scalajs.js.Promise
 
 object SmithyUtils {
+  // todo note to smithy4s-fetch about proper suspension
   def suspendPromise[Alg[_[_, _, _, _, _]], F[_]: Async](
       impl: Alg[Kind1[Promise]#toKind5]
   )(using svc: Service[Alg]): svc.Impl[F] =
