@@ -10,3 +10,7 @@ A place for sharing beautiful Scala snippets.
 - Removal of fake data
 - Add some real snippets
 - Deployment :smile:
+
+## Deployment
+
+`sbt herokuDeploy`

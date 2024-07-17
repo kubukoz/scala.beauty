@@ -13,6 +13,7 @@ val commonSettings = Seq(
     compilerPlugin("org.polyvariant" % "better-tostring" % "0.3.17" cross CrossVersion.full),
     "com.disneystreaming" %%% "weaver-cats" % "0.8.4" % Test,
   ),
+  publish / skip := true,
 )
 
 def module(implicit name: sourcecode.Name) =
@@ -35,6 +36,8 @@ val shared =
       )
     )
 
+val yarnBuild = taskKey[File]("Build the web app. Returns the dist directory")
+
 val frontend = module
   .enablePlugins(ScalaJSPlugin)
   .settings(
@@ -43,8 +46,23 @@ val frontend = module
       "tech.neander"    %%% "smithy4s-fetch" % "0.0.4",
     ),
     scalaJSLinkerConfig ~= { _.withModuleKind(ModuleKind.ESModule) },
+    yarnBuild := {
+      import sys.process._
+      Process(
+        List(
+          "yarn",
+          "--cwd",
+          baseDirectory.value.toString,
+          "build",
+        )
+      ).!
+
+      baseDirectory.value / "dist"
+    },
   )
   .dependsOn(shared.js(scala3))
+
+val isHeroku = settingKey[Boolean]("whether we're deploying to Heroku")
 
 val backend = module
   .enablePlugins(JavaAppPackaging, DockerPlugin)
@@ -54,9 +72,43 @@ val backend = module
       "com.disneystreaming.smithy4s" %% "smithy4s-http4s-swagger"         % smithy4sVersion.value,
       "org.http4s"                   %% "http4s-ember-server"             % "0.23.27",
       "org.tpolecat"                 %% "skunk-core"                      % "0.6.4",
+      "is.cir"                       %% "ciris"                           % "3.6.0",
       "com.dimafeng"                 %% "testcontainers-scala-postgresql" % "0.41.4" % Test,
     ),
-    fork := true,
+    fork               := true,
+    dockerUpdateLatest := true,
+    isHeroku           := false,
+    dockerBuildOptions ++= { if (isHeroku.value) Seq("--platform", "linux/amd64") else Nil },
+    dockerAlias := (
+      if (isHeroku.value)
+        DockerAlias(
+          registryHost = Some("registry.heroku.com"),
+          username = Some("scala-beauty"),
+          name = "web",
+          tag = None,
+        )
+      else
+        DockerAlias(
+          registryHost = None,
+          username = None,
+          name = "scala-beauty",
+          tag = None,
+        )
+    ),
+    dockerBaseImage := "openjdk:11-jre",
+
+    // include frontend
+    Compile / resourceGenerators += Def.task {
+      import sys.process._
+
+      val frontendDir = (frontend / yarnBuild).value
+      val targetDir   = (Compile / resourceManaged).value / "frontend"
+
+      IO.delete(targetDir)
+      IO.copyDirectory(frontendDir, targetDir)
+
+      Path.allSubpaths(targetDir).map(_._1).toList
+    },
   )
   .dependsOn(shared.jvm(autoScalaLibrary = true))
 
@@ -76,3 +128,19 @@ val root = project
   .in(file("."))
   .aggregate(backend, frontend)
   .aggregate(shared.projectRefs: _*)
+  .settings(
+    publish / skip := true,
+    addCommandAlias(
+      "herokuPush",
+      List(
+        "set backend/isHeroku := true",
+        "backend/Docker/publish",
+        "set backend/isHeroku := false",
+      ).mkString(";"),
+    ),
+    TaskKey[String]("herokuRelease") := {
+      import sys.process.*
+      "heroku container:release web".!!
+    },
+    addCommandAlias("herokuDeploy", "herokuPush;herokuRelease"),
+  )
