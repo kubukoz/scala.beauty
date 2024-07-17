@@ -1,5 +1,6 @@
 package scalabeauty.backend
 
+import cats.data.NonEmptyList
 import cats.effect.kernel.Resource
 import cats.effect.IO
 import cats.effect.IOApp
@@ -44,11 +45,14 @@ object BackendMain extends IOApp.Simple {
 
       route <- SimpleRestJsonBuilder.routes(service).resource
 
-      httpApp = (
-        route <+>
-          staticRoutes <+>
-          smithy4s.http4s.swagger.docs[IO](ScalaBeautyApi)
-      ).orNotFound
+      httpApp = NonEmptyList
+        .of(
+          route,
+          smithy4s.http4s.swagger.docs[IO](ScalaBeautyApi),
+          staticRoutes,
+        )
+        .reduceK
+        .orNotFound
 
       server <- EmberServerBuilder
         .default[IO]
@@ -69,15 +73,17 @@ object BackendMain extends IOApp.Simple {
   import org.http4s.dsl.io.*
 
   private def staticRoutes = HttpRoutes.of[IO] {
-    case req @ GET -> ((Root / "index.html") | Root) =>
-      StaticFile
-        .fromResource("frontend/index.html", Some(req))
-        .getOrElseF(InternalServerError())
-
     case req @ GET -> path if path.startsWith(Root / "assets") =>
       StaticFile
         .fromResource("frontend/" + path.renderString, Some(req))
         .getOrElseF(InternalServerError())
+
+    case req =>
+      // catch-all for the SPA
+      StaticFile
+        .fromResource("frontend/index.html", Some(req))
+        .getOrElseF(InternalServerError())
+
   }
 
   private def mkSlug(len: Int) = Slug(Random.alphanumeric.take(len).mkString.toLowerCase())
