@@ -1,19 +1,17 @@
 package scalabeauty.backend
 
 import cats.data.NonEmptyList
-import cats.effect.kernel.Resource
 import cats.effect.IO
 import cats.effect.IOApp
 import cats.syntax.all.*
 import com.comcast.ip4s.*
-import natchez.Trace
+import doobie.hikari.HikariTransactor
+import doobie.util.ExecutionContexts
 import org.http4s.ember.server.EmberServerBuilder
 import org.http4s.server.middleware.HSTS
 import org.http4s.HttpRoutes
 import org.http4s.StaticFile
 import scalabeauty.api.*
-import skunk.SSL
-import skunk.Session
 import smithy4s.http4s.SimpleRestJsonBuilder
 import smithy4s.Timestamp
 
@@ -24,23 +22,20 @@ object BackendMain extends IOApp.Simple {
 
   def run: IO[Unit] = {
 
-    given Trace[IO] = Trace.Implicits.noop
-
     for {
       config <- AppConfig.read.load[IO].toResource
       _      <- IO.println(s"Loaded config: $config").toResource
-      sessionPool <- Session.pooled[IO](
-        host = config.db.host,
-        port = config.db.port,
-        user = config.db.user,
-        database = config.db.database,
-        password = Some(config.db.password.value),
-        max = 10,
-        // todo: None locally
-        // ssl = SSL.None,
-        ssl = SSL.Trusted,
+
+      connectEc <- ExecutionContexts.fixedThreadPool[IO](size = 10)
+      transactor <- doobie.hikari.HikariTransactor.newHikariTransactor[IO](
+        classOf[org.postgresql.Driver].getName(),
+        s"jdbc:postgresql://${config.db.host}:${config.db.port}/${config.db.database}",
+        config.db.user,
+        config.db.password.value,
+        connectEc,
       )
-      repo = SnippetRepository.instance(sessionPool)
+
+      repo = SnippetRepository.doobieInstance(transactor)
 
       _ <- initStates(repo).toResource
 

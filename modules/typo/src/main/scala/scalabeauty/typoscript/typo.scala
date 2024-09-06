@@ -1,17 +1,35 @@
-// adapt to your instance and credentials
-implicit val c: java.sql.Connection =
-  java.sql.DriverManager.getConnection("jdbc:postgresql://localhost:5432/postgres?user=postgres&password=postgres")
-
 import typo.*
+
+import java.sql.DriverManager
+
+val conn = DriverManager.getConnection("jdbc:postgresql://localhost:5432/postgres", "postgres", "postgres")
+
+val init =
+  try
+    conn
+      .createStatement()
+      .execute("""
+create table if not exists snippets (
+id text primary key,
+description text not null,
+code text not null,
+author jsonb not null,
+created_at timestamptz not null);""")
+  finally conn.close()
+
+val ds = typo.TypoDataSource.hikari(
+  server = "localhost",
+  port = 5432,
+  databaseName = "postgres",
+  username = "postgres",
+  password = "postgres",
+)
+
 val options = Options(
-  // customize package name for generated code
-  pkg = "org.foo.generated",
-  // pick your database library
+  pkg = "scalabeauty.db.generated",
   dbLib = Some(DbLibName.Doobie),
   jsonLibs = Nil,
   enableDsl = true,
-  // many more possibilities for customization here
-  // ...
 )
 
 // current folder, where you run the script from
@@ -29,9 +47,10 @@ val selector = Selector.ExcludePostgresInternal
 
 @main def run =
   generateFromDb(
+    ds,
     options,
     targetFolder = targetDir,
     testTargetFolder = Some(testTargetDir),
     selector = selector,
     scriptsPaths = List(scriptsFolder),
-  ).overwriteFolder()
+  ).foreach(_.overwriteFolder())

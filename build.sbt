@@ -65,7 +65,7 @@ val frontend = module
 val typoModels = module
   .settings(
     libraryDependencies ++= Seq(
-      "com.olvind.typo" %% "typo-dsl-doobie" % "0.22.2"
+      "com.olvind.typo" %% "typo-dsl-doobie" % "0.26.0"
     )
   )
 
@@ -78,7 +78,7 @@ val backend = module
       "com.disneystreaming.smithy4s" %% "smithy4s-http4s"                 % smithy4sVersion.value,
       "com.disneystreaming.smithy4s" %% "smithy4s-http4s-swagger"         % smithy4sVersion.value,
       "org.http4s"                   %% "http4s-ember-server"             % "0.23.27",
-      "org.tpolecat"                 %% "skunk-core"                      % "0.6.4",
+      "org.tpolecat"                 %% "doobie-hikari"                   % "1.0.0-RC5",
       "is.cir"                       %% "ciris"                           % "3.6.0",
       "com.dimafeng"                 %% "testcontainers-scala-postgresql" % "0.41.4" % Test,
     ),
@@ -117,7 +117,7 @@ val backend = module
       Path.allSubpaths(targetDir).map(_._1).toList
     },
   )
-  .dependsOn(shared.jvm(autoScalaLibrary = true))
+  .dependsOn(shared.jvm(autoScalaLibrary = true), typoModels)
 
 val cli = module
   .enablePlugins(JavaAppPackaging)
@@ -129,19 +129,19 @@ val cli = module
     ),
     fork := true,
   )
-  .dependsOn(shared.jvm(autoScalaLibrary = true), typoModels)
+  .dependsOn(shared.jvm(autoScalaLibrary = true))
 
 val typo = module
   .settings(
     libraryDependencies ++= Seq(
-      "com.olvind.typo" %% "typo" % "0.22.2"
+      "com.olvind.typo" %% "typo" % "0.26.0"
     ),
     fork := true,
   )
 
 val root = project
   .in(file("."))
-  .aggregate(backend, frontend)
+  .aggregate(backend, frontend, typo, typoModels)
   .aggregate(shared.projectRefs: _*)
   .settings(
     publish / skip := true,
