@@ -1,6 +1,6 @@
 addSbtPlugin("io.github.davidgregory084" % "sbt-tpolecat" % "0.4.3")
 addSbtPlugin(
-  "com.disneystreaming.smithy4s" % "smithy4s-sbt-codegen" % "0.18.21"
+  "com.disneystreaming.smithy4s" % "smithy4s-sbt-codegen" % "0.18.23"
 )
 addSbtPlugin("com.github.sbt" % "sbt-native-packager" % "1.10.0")
 
