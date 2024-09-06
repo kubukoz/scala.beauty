@@ -10,7 +10,7 @@ service ScalaBeautyApi {
     operations: [GetSnippets, GetSnippet]
 }
 
-@http(method: "GET", uri: "/snippets")
+@http(method: "GET", uri: "/api/snippets")
 @readonly
 operation GetSnippets {
     input := {
@@ -32,7 +32,7 @@ structure Pagination {
     totalPages: Page
 }
 
-@http(method: "GET", uri: "/snippets/{id}")
+@http(method: "GET", uri: "/api/snippets/{id}")
 @readonly
 operation GetSnippet {
     input := {
