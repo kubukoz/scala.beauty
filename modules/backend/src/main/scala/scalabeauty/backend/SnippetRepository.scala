@@ -1,7 +1,6 @@
 package scalabeauty.backend
 
 import cats.effect.IO
-import cats.syntax.all.*
 import doobie.implicits.*
 import doobie.util.transactor.Transactor
 import scalabeauty.api.*
@@ -20,8 +19,8 @@ import smithy4s.Timestamp
 trait SnippetRepository {
   def createTable(): IO[Unit]
   def insert(snippets: List[Snippet]): IO[Unit]
-  def getAll(offset: Long, limit: Int): IO[List[Snippet]]
-  def countAll(): IO[Long]
+  def getAll(offset: Int, limit: Int): IO[List[Snippet]]
+  def countAll(): IO[Int]
   def get(id: Slug): IO[Option[Snippet]]
 }
 
@@ -31,7 +30,7 @@ object SnippetRepository {
     private val underlyingInit: InitSqlRepo = new InitSqlRepoImpl()
     private val underlying: SnippetsRepo    = new SnippetsRepoImpl()
 
-    def countAll(): IO[Long]    = underlying.select.count.transact(xa).map(_.toLong)
+    def countAll(): IO[Int]     = underlying.select.count.transact(xa)
     def createTable(): IO[Unit] = underlyingInit().transact(xa).void
     def get(id: Slug): IO[Option[Snippet]] = underlying
       .selectById(SnippetsId(id.value))
@@ -54,20 +53,20 @@ object SnippetRepository {
       createdAt = TypoInstant(s.createdAt.toInstant),
     )
 
-    def getAll(offset: Long, limit: Int): IO[List[Snippet]] =
+    def getAll(offset: Int, limit: Int): IO[List[Snippet]] =
       underlying.select
         .orderBy(_.createdAt.desc)
-        .offset(offset.toInt /* apparently - todo change to int in api? */ )
+        .offset(offset)
         .limit(limit)
         .toList
         .transact(xa)
         .map(_.map(decodeSnippet))
 
     def insert(snippets: List[Snippet]): IO[Unit] =
-      snippets
-        .traverse_ { snippet =>
-          underlying.upsert(encodeSnippet(snippet))
-        }
+      underlying
+        .upsertBatch(snippets.map(encodeSnippet))
+        .compile
+        .drain
         .transact(xa)
   }
 
@@ -81,16 +80,16 @@ object SnippetRepository {
         }
       }
 
-      def getAll(offset: Long, limit: Int): IO[List[Snippet]] =
+      def getAll(offset: Int, limit: Int): IO[List[Snippet]] =
         ref.get.map(
           _.values.toList
             .sortBy(_.createdAt.toInstant)
             .reverse
-            .drop(offset.toInt)
+            .drop(offset)
             .take(limit)
         )
 
-      def countAll(): IO[Long] = ref.get.map(_.size.toLong)
+      def countAll(): IO[Int] = ref.get.map(_.size)
 
       def get(id: Slug): IO[Option[Snippet]] = ref.get.map(_.get(id))
     }

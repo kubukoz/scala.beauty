@@ -7,10 +7,7 @@ use alloy#simpleRestJson
 @simpleRestJson
 service ScalaBeautyApi {
     version: "v1"
-    operations: [
-        GetSnippets
-        GetSnippet
-    ]
+    operations: [GetSnippets, GetSnippet]
 }
 
 @http(method: "GET", uri: "/snippets")
@@ -20,11 +17,9 @@ operation GetSnippets {
         @httpQuery("page")
         page: Page
     }
-
     output := {
         @required
         snippets: Snippets
-
         @required
         pagination: Pagination
     }
@@ -33,7 +28,6 @@ operation GetSnippets {
 structure Pagination {
     @required
     currentPage: Page
-
     @required
     totalPages: Page
 }
@@ -46,16 +40,12 @@ operation GetSnippet {
         @required
         id: Slug
     }
-
     output := {
         @httpPayload
         @required
         snippet: Snippet
     }
-
-    errors: [
-        SnippetNotFound
-    ]
+    errors: [SnippetNotFound]
 }
 
 @error("client")
@@ -69,16 +59,12 @@ list Snippets {
 structure Snippet {
     @required
     id: Slug
-
     @required
     description: String
-
     @required
     code: String
-
     @required
     author: Author
-
     @required
     @timestampFormat("date-time")
     createdAt: Timestamp
@@ -96,4 +82,4 @@ structure GithubAuthor {
 string Slug
 
 @range(min: 0)
-long Page
+integer Page

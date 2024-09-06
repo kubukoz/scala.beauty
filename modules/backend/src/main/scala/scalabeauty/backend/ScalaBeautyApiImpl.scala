@@ -25,8 +25,8 @@ object ScalaBeautyApiImpl {
           )
         }
 
-      private def calcPageCount(pageSize: Long, itemCount: Long): Long =
-        (itemCount.toDouble / pageSize).ceil.toLong
+      private def calcPageCount(pageSize: Int, itemCount: Int): Int =
+        (itemCount.toDouble / pageSize).ceil.toInt
 
       def getSnippet(id: Slug): IO[GetSnippetOutput] =
         repo

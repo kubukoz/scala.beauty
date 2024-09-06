@@ -77,7 +77,7 @@ trait SnippetRepositoryTests extends weaver.SimpleIOSuite {
 
       repo.insert(inputs) *>
         repo
-          .getAll(offset = 0L, limit = 10)
+          .getAll(offset = 0, limit = 10)
           .map(result =>
             assert.same(
               inputs.sortBy(_.createdAt.toInstant).reverse,
