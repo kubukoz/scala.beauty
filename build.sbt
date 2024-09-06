@@ -1,7 +1,7 @@
 import sbt.internal.ProjectMatrix
 import sbt.VirtualAxis.ScalaVersionAxis
 
-val scala3 = "3.4.2"
+val scala3 = "3.5.0"
 
 ThisBuild / organization := "beauty.scala"
 

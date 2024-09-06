@@ -27,7 +27,7 @@ object BackendMain extends IOApp.Simple {
       _      <- IO.println(s"Loaded config: $config").toResource
 
       connectEc <- ExecutionContexts.fixedThreadPool[IO](size = 10)
-      transactor <- doobie.hikari.HikariTransactor.newHikariTransactor[IO](
+      transactor <- HikariTransactor.newHikariTransactor[IO](
         classOf[org.postgresql.Driver].getName(),
         s"jdbc:postgresql://${config.db.host}:${config.db.port}/${config.db.database}",
         config.db.user,
