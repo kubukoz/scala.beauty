@@ -28,8 +28,8 @@ enum Msg {
   case SetTitle(title: String)
   case UpdatePlaceholder(hash: Slug)
   case ShortenMask
-  case ShortenMaskHome(i: Int)
-  case UpdatePlaceholderHome(hash: Slug, i: Int)
+  case ShortenMasksHome
+  case UpdatePlaceholdersHome(hashes: List[Slug])
 }
 
 case class Model(page: Page) {
@@ -214,7 +214,7 @@ object FrontendMain extends TyrianIOApp[Msg, Model] {
         model.copy(page = Page.Snippet(SnippetState.Fetching, placeholderSlug = mkSlug(10))),
         Cmd.emit(Msg.SetTitle("Scala.beauty - loading snippet " + id.hashed))
           |+| Cmd
-            .Run(ScalaBeautyApi[IO].getSnippet(id).map(_.snippet).flatMap(attachCode))
+            .Run(ScalaBeautyApi[IO].getSnippet(id).delayBy(5.seconds).map(_.snippet).flatMap(attachCode))
             .map(Msg.SnippetFetched(_)),
       )
 
@@ -261,11 +261,11 @@ object FrontendMain extends TyrianIOApp[Msg, Model] {
         _.mapSnippet(s => s.copy(placeholderSlug = hash))
       ) -> Cmd.None
 
-    case Msg.UpdatePlaceholderHome(hash, i) =>
+    case Msg.UpdatePlaceholdersHome(hashes) =>
       model.mapPage(
         _.mapHome {
           case Page.Home(HomeData.Loading(slugs)) =>
-            Page.Home(HomeData.Loading(slugs.updated(i, hash)))
+            Page.Home(HomeData.Loading(hashes))
           case h => h
         }
       ) -> Cmd.None
@@ -275,8 +275,9 @@ object FrontendMain extends TyrianIOApp[Msg, Model] {
         _.mapSnippet(s => s.copy(state = s.state.mapFetched(s => s.copy(maskSize = s.maskSize - 1))))
       ) -> Cmd.None
 
-    // case Msg.ShortenMaskHome(i) =>
-    //   // update the i-th slug
+    case Msg.ShortenMasksHome =>
+      // shorten all slugs
+      model -> Cmd.None
 
     case Msg.NoOp => (model, Cmd.None)
   }
@@ -288,7 +289,7 @@ object FrontendMain extends TyrianIOApp[Msg, Model] {
           case SnippetState.Fetching         => Masked.Model.Pending
           case SnippetState.Fetched(_, size) => Masked.Model.Fetched(size)
         }
-        Masked.subscriptions(innerState)(
+        Masked.subscriptions(innerState, "mask-snippet")(
           onShorten = Msg.ShortenMask,
           onUpdate = Msg.UpdatePlaceholder(mkSlug(10)),
         )
@@ -296,13 +297,11 @@ object FrontendMain extends TyrianIOApp[Msg, Model] {
       case Page.Home(state) =>
         state match {
           case HomeData.Loading(slugs) =>
-            slugs.zipWithIndex.foldMap { (_, i) =>
-              Masked
-                .subscriptions(Masked.Model.Pending)(
-                  onShorten = Msg.ShortenMaskHome(i),
-                  onUpdate = Msg.UpdatePlaceholderHome(mkSlug(10), i),
-                )
-            }
+            Masked
+              .subscriptions(Masked.Model.Pending, "masks-home")(
+                onShorten = Msg.ShortenMasksHome,
+                onUpdate = Msg.UpdatePlaceholdersHome(slugs.map(_ => mkSlug(10))),
+              )
 
           case HomeData.Loaded(_, _) => Sub.None
         }
