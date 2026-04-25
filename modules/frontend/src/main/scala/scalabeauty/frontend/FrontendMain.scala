@@ -11,6 +11,7 @@ import tyrian.Html.*
 
 import scala.annotation.nowarn
 import scala.scalajs.js.annotation.JSExportTopLevel
+import scala.util.Try
 
 import HtmlUtils.*
 
@@ -26,6 +27,8 @@ enum Msg {
   case SetTitle(title: String)
   case UpdatePlaceholder(hash: Slug)
   case ShortenMask
+  case ShortenMasksHome
+  case UpdatePlaceholdersHome(hashes: List[Slug])
 }
 
 case class Model(page: Page) {
@@ -63,7 +66,7 @@ object RichSnippet {
 }
 
 enum HomeData {
-  case Loading
+  case Loading(slugs: List[Slug])
   case Loaded(results: List[RichSnippet], pagination: api.Pagination)
 }
 
@@ -104,13 +107,13 @@ object FrontendMain extends TyrianIOApp[Msg, Model] {
 
   private def initialize(page: Option[api.Page]): (Model, Cmd[IO, Msg]) =
     (
-      Model(Page.Home(HomeData.Loading)),
+      Model(Page.Home(HomeData.Loading(List.fill(5)(mkSlug(10))))),
       Cmd.emit(Msg.SetTitle("Scala.beauty"))
         |+| Cmd
           .Run(
             ScalaBeautyApi[IO]
               .getSnippets(page)
-              // .delayBy(5.seconds)
+              .delayBy(5.seconds)
               .flatMap { output =>
                 output.snippets
                   .traverse(attachCode)
@@ -150,31 +153,54 @@ object FrontendMain extends TyrianIOApp[Msg, Model] {
         a(linkAttrs("https://github.com/kubukoz/scala.beauty/issues/new/choose"))(
           "Add yours"
         )
-      ),
-      state match {
-        case HomeData.Loading => div(className := "block")(text("Loading..."))
-        case HomeData.Loaded(results, pagination) =>
-          div(
-            ul(className := "block")(
-              results.map { snippet =>
-                li(className := "block")(
-                  a(href := "/snippet/" + snippet.id)(
-                    SnippetComponent.viewBox(snippet)
-                  )
+      ), {
+        val (results, pagination) = state match {
+          case HomeData.Loading(slugs) =>
+            (
+              slugs.map { slug =>
+                RichSnippet(
+                  id = slug,
+                  description = "Loading...",
+                  code = """def loading = println("loading snippets...")""",
+                  author = Author.github(GithubAuthor("could-be-you")),
+                  // todo: yikes
+                  createdAt = Timestamp.nowUTC(),
+                  // todo: actually format the code somehow (yikes, IO...)
+                  codeHtml = """<pre><code>def loading = println("loading snippets...")</code></pre>""",
                 )
+              },
+              None,
+            )
+          case HomeData.Loaded(results, pagination) => (results, Some(pagination))
+        }
 
+        val showLinks = state match {
+          case HomeData.Loading(_)   => false
+          case HomeData.Loaded(_, _) => true
+        }
+
+        div(
+          ul(className := "block")(
+            results.map { snippet =>
+              li(className := "block") {
+                if showLinks
+                then a(href := "/snippet/" + snippet.id)(SnippetComponent.viewBox(snippet))
+                else SnippetComponent.viewBox(snippet)
               }
-            ),
-            Pagination.view(Pagination.getPaginationBlocks(pagination)),
-          )
+
+            }
+          ) ::
+            pagination.map(Pagination.getPaginationBlocks).map(Pagination.view).toList
+        )
+
       },
     )
 
   @nowarn("msg=unused")
   private def logged[A, B](f: A => B): A => B = a => {
-    val result = f(a)
+    val result = Try(f(a))
     println(s"Action: $a\nResult: $result")
-    result
+    result.get
   }
 
   def update(model: Model): Msg => (Model, Cmd[IO, Msg]) = {
@@ -187,7 +213,7 @@ object FrontendMain extends TyrianIOApp[Msg, Model] {
         model.copy(page = Page.Snippet(SnippetState.Fetching, placeholderSlug = mkSlug(10))),
         Cmd.emit(Msg.SetTitle("Scala.beauty - loading snippet " + id.hashed))
           |+| Cmd
-            .Run(ScalaBeautyApi[IO].getSnippet(id).map(_.snippet).flatMap(attachCode))
+            .Run(ScalaBeautyApi[IO].getSnippet(id).delayBy(5.seconds).map(_.snippet).flatMap(attachCode))
             .map(Msg.SnippetFetched(_)),
       )
 
@@ -233,30 +259,52 @@ object FrontendMain extends TyrianIOApp[Msg, Model] {
       model.mapPage(
         _.mapSnippet(s => s.copy(placeholderSlug = hash))
       ) -> Cmd.None
+
+    case Msg.UpdatePlaceholdersHome(hashes) =>
+      model.mapPage(
+        _.mapHome {
+          case Page.Home(HomeData.Loading(slugs)) =>
+            Page.Home(HomeData.Loading(hashes))
+          case h => h
+        }
+      ) -> Cmd.None
+
     case Msg.ShortenMask =>
       model.mapPage(
         _.mapSnippet(s => s.copy(state = s.state.mapFetched(s => s.copy(maskSize = s.maskSize - 1))))
       ) -> Cmd.None
 
+    case Msg.ShortenMasksHome =>
+      // shorten all slugs
+      model -> Cmd.None
+
     case Msg.NoOp => (model, Cmd.None)
   }
 
   def subscriptions(model: Model): Sub[IO, Msg] =
-    model.page
-      .match {
-        case Page.Snippet(state, _) =>
-          state.match {
-            case SnippetState.Fetching         => Masked.Model.Pending
-            case SnippetState.Fetched(_, size) => Masked.Model.Fetched(size)
-          }.some
-        case Page.Home(_) => none
-      }
-      .foldMap(
-        Masked.subscriptions(_)(
+    model.page.match {
+      case Page.Snippet(state, _) =>
+        val innerState = state match {
+          case SnippetState.Fetching         => Masked.Model.Pending
+          case SnippetState.Fetched(_, size) => Masked.Model.Fetched(size)
+        }
+        Masked.subscriptions(innerState, "mask-snippet")(
           onShorten = Msg.ShortenMask,
           onUpdate = Msg.UpdatePlaceholder(mkSlug(10)),
         )
-      )
+
+      case Page.Home(state) =>
+        state match {
+          case HomeData.Loading(slugs) =>
+            Masked
+              .subscriptions(Masked.Model.Pending, "masks-home")(
+                onShorten = Msg.ShortenMasksHome,
+                onUpdate = Msg.UpdatePlaceholdersHome(slugs.map(_ => mkSlug(10))),
+              )
+
+          case HomeData.Loaded(_, _) => Sub.None
+        }
+    }
 
   // todo share with backend
   // todo side effects
