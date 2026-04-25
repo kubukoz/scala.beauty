@@ -1,6 +1,6 @@
 addSbtPlugin("org.typelevel" % "sbt-tpolecat" % "0.5.2")
 
-addSbtPlugin("com.disneystreaming.smithy4s" % "smithy4s-sbt-codegen" % "0.18.23")
+addSbtPlugin("com.disneystreaming.smithy4s" % "smithy4s-sbt-codegen" % "0.18.51")
 
 addSbtPlugin("com.github.sbt" % "sbt-native-packager" % "1.10.0")
 
@@ -10,7 +10,7 @@ libraryDependencies ++= Seq(
   "com.lihaoyi" %% "sourcecode" % "0.4.2"
 )
 
-addSbtPlugin("org.scala-js" % "sbt-scalajs"       % "1.16.0")
+addSbtPlugin("org.scala-js" % "sbt-scalajs"       % "1.21.0")
 addSbtPlugin("com.eed3si9n" % "sbt-projectmatrix" % "0.10.0")
 
 addDependencyTreePlugin

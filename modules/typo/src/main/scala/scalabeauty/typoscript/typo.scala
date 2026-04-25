@@ -30,6 +30,7 @@ val options = Options(
   dbLib = Some(DbLibName.Doobie),
   jsonLibs = Nil,
   enableDsl = true,
+  dialect = Dialect.Scala3,
 )
 
 // current folder, where you run the script from
@@ -53,4 +54,4 @@ val selector = Selector.ExcludePostgresInternal
     testTargetFolder = Some(testTargetDir),
     selector = selector,
     scriptsPaths = List(scriptsFolder),
-  ).foreach(_.overwriteFolder())
+  ).foreach(_.overwriteFolder(Dialect.Scala3))

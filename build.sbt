@@ -1,7 +1,7 @@
 import sbt.internal.ProjectMatrix
 import sbt.VirtualAxis.ScalaVersionAxis
 
-val scala3 = "3.5.0"
+val scala3 = "3.8.3"
 
 ThisBuild / organization := "beauty.scala"
 
@@ -65,7 +65,7 @@ val frontend = module
 val typoModels = module
   .settings(
     libraryDependencies ++= Seq(
-      "com.olvind.typo" %% "typo-dsl-doobie" % "0.26.0"
+      "com.olvind.typo" %% "typo-dsl-doobie" % "0.31.0"
     )
   )
 
@@ -77,9 +77,9 @@ val backend = module
     libraryDependencies ++= Seq(
       "com.disneystreaming.smithy4s" %% "smithy4s-http4s"                 % smithy4sVersion.value,
       "com.disneystreaming.smithy4s" %% "smithy4s-http4s-swagger"         % smithy4sVersion.value,
-      "org.http4s"                   %% "http4s-ember-server"             % "0.23.27",
-      "org.tpolecat"                 %% "doobie-hikari"                   % "1.0.0-RC5",
-      "is.cir"                       %% "ciris"                           % "3.6.0",
+      "org.http4s"                   %% "http4s-ember-server"             % "0.23.34",
+      "org.tpolecat"                 %% "doobie-hikari"                   % "1.0.0-RC9",
+      "is.cir"                       %% "ciris"                           % "3.14.1",
       "com.dimafeng"                 %% "testcontainers-scala-postgresql" % "0.41.4" % Test,
     ),
     fork               := true,
@@ -125,7 +125,7 @@ val cli = module
     libraryDependencies ++= Seq(
       "com.disneystreaming.smithy4s" %% "smithy4s-http4s"     % smithy4sVersion.value,
       "com.disneystreaming.smithy4s" %% "smithy4s-decline"    % smithy4sVersion.value,
-      "org.http4s"                   %% "http4s-ember-client" % "0.23.27",
+      "org.http4s"                   %% "http4s-ember-client" % "0.23.34",
     ),
     fork := true,
   )
@@ -134,7 +134,7 @@ val cli = module
 val typo = module
   .settings(
     libraryDependencies ++= Seq(
-      "com.olvind.typo" %% "typo" % "0.26.0"
+      "com.olvind.typo" %% "typo" % "0.31.0"
     ),
     fork := true,
   )

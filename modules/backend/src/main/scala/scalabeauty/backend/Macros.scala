@@ -1,7 +1,5 @@
 package scalabeauty.backend
 
-import cats.syntax.all.*
-
 import java.nio.file.Path
 import java.nio.file.Paths
 import scala.quoted.*

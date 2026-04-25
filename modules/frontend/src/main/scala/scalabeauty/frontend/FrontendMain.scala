@@ -10,7 +10,6 @@ import tyrian.*
 import tyrian.Html.*
 
 import scala.annotation.nowarn
-import scala.concurrent.duration.*
 import scala.scalajs.js.annotation.JSExportTopLevel
 
 import HtmlUtils.*
